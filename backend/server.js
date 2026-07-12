@@ -10,7 +10,7 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 const registerDebateSocket = require("./sockets/debateSocket");
-const { startDebateCleanup } = require("./utils/debateCleanup"); // ← NEW
+const { startDebateCleanup } = require("./utils/debateCleanup.js"); // ← NEW
 
 // Routes
 const authRoutes = require("./routes/authRoutes");
