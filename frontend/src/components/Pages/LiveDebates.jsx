@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaSearch, FaCircle, FaEye, FaUsers, FaClock,
   FaTrophy, FaFire, FaBolt, FaLeaf, FaLandmark,
@@ -8,9 +9,9 @@ import {
 } from "react-icons/fa";
 import { MdLiveTv } from "react-icons/md";
 import AIBackground from "../Home/AIBackground";
-
-/* ─── Nav items ─── */
-const navLinks = ["Home", "Live Debates", "Topics", "Leaderboard", "AI Coach"];
+import { debateApi } from "../../services/api";
+import { useAuth } from "../../hooks/useAuth";
+import CreateDebateModal from "./CreateDebateModal";
 
 /* ─── Filter tabs ─── */
 const filters = [
@@ -24,101 +25,112 @@ const filters = [
 
 const sortOptions = ["Latest", "Most Watched", "Ending Soon", "Most Joined"];
 
-/* ─── Debate data ─── */
-const debates = [
-  {
-    id: 1,
-    title: "AI Ethics: Should AI have rights?",
-    tag: "Technology",
-    tagColor: "text-blue-400",
-    tagBg: "bg-blue-500/10 border-blue-500/25",
-    watching: 324,
-    timeLeft: "45 min left",
-    debaterA: {
-      name: "Emma Watson",
-      rating: 1840,
-      avatar: "https://i.pravatar.cc/48?img=47",
-      argument: "AI systems demonstrate self-awareness and deserve ethical consideration and legal protections.",
-    },
-    debaterB: {
-      name: "AI Judge",
-      rating: 2100,
-      avatar: null, // robot
-      argument: "Evaluating arguments based on logic, evidence, and persuasiveness in real time.",
-    },
-    isAI: true,
-    hot: true,
-  },
-  {
-    id: 2,
-    title: "Climate Change: Act Now or Too Late?",
-    tag: "Science",
-    tagColor: "text-green-400",
-    tagBg: "bg-green-500/10 border-green-500/25",
-    watching: 278,
-    timeLeft: "30 min left",
-    debaterA: {
-      name: "Michael Lee",
-      rating: 1920,
-      avatar: "https://i.pravatar.cc/48?img=12",
-      argument: "Immediate, radical action on carbon emissions is our only path to survival.",
-    },
-    debaterB: {
-      name: "Sarah Khan",
-      rating: 1780,
-      avatar: "https://i.pravatar.cc/48?img=32",
-      argument: "Gradual, economically sustainable solutions prevent collapse while driving green innovation.",
-    },
-    isAI: false,
-    hot: false,
-  },
-  {
-    id: 3,
-    title: "Social Media: Connection or Addiction?",
-    tag: "Society",
-    tagColor: "text-pink-400",
-    tagBg: "bg-pink-500/10 border-pink-500/25",
-    watching: 156,
-    timeLeft: "20 min left",
-    debaterA: {
-      name: "David Brown",
-      rating: 1650,
-      avatar: "https://i.pravatar.cc/48?img=8",
-      argument: "Social platforms have fundamentally eroded mental health and attention spans globally.",
-    },
-    debaterB: {
-      name: "AI Judge",
-      rating: 2100,
-      avatar: null,
-      argument: "Assessing the sociological and psychological evidence from both perspectives.",
-    },
-    isAI: true,
-    hot: false,
-  },
-  {
-    id: 4,
-    title: "Future of Work: AI as a Partner or Threat?",
-    tag: "Technology",
-    tagColor: "text-blue-400",
-    tagBg: "bg-blue-500/10 border-blue-500/25",
-    watching: 189,
-    timeLeft: "25 min left",
-    debaterA: {
-      name: "Olivia Smith",
-      rating: 1710,
-      avatar: "https://i.pravatar.cc/48?img=25",
-      argument: "AI will eliminate more jobs than it creates, requiring urgent universal basic income policies.",
-    },
-    debaterB: {
-      name: "James Wilson",
-      rating: 1830,
-      avatar: "https://i.pravatar.cc/48?img=15",
-      argument: "Historical tech waves always created new categories of work; AI will be no different.",
-    },
-    isAI: false,
-    hot: true,
-  },
-];
+const TAG_STYLES = {
+  Technology: { color: "text-blue-400",   bg: "bg-blue-500/10 border-blue-500/25" },
+  Science:    { color: "text-green-400",  bg: "bg-green-500/10 border-green-500/25" },
+  Politics:   { color: "text-amber-400",  bg: "bg-amber-500/10 border-amber-500/25" },
+  Education:  { color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/25" },
+  General:    { color: "text-gray-400",   bg: "bg-gray-500/10 border-gray-500/25" },
+};
+
+const WAITING_EXPIRY_MS = 5 * 60 * 1000; // must match backend debateCleanup.js
+
+/* ─── Time left string from endsAt ─── */
+function getTimeLeft(endsAt, status, duration, createdAt) {
+  if (status === "waiting") {
+    if (!createdAt) return duration ? `${duration} min debate` : "Waiting";
+    const expiresAt = new Date(createdAt).getTime() + WAITING_EXPIRY_MS;
+    const secs = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+    if (secs <= 0) return "Expiring…";
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `Closes in ${String(mins).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  if (!endsAt) return "In progress";
+  const secs = Math.max(0, Math.round((new Date(endsAt) - Date.now()) / 1000));
+  if (secs <= 0) return "Ending…";
+  const mins = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(mins).padStart(2, "0")}:${String(s).padStart(2, "0")} left`;
+}
+
+function toCardShape(d) {
+  const tagStyle = TAG_STYLES[d.category] || TAG_STYLES.General;
+  const forSide = d.participants?.find((p) => p.side === "for");
+  const againstSide = d.participants?.find((p) => p.side === "against");
+
+  const toDebater = (p) => ({
+    name: p?.user?.name || "Waiting…",
+    rating: p?.user?.rating ?? 1000,
+    avatar: p?.user?.isAI ? null : p?.user?.avatar || null,
+    argument:
+      [...(d.rounds || [])].reverse().find((r) => r.side === p?.side)?.text ||
+      "No argument yet.",
+  });
+
+  const isJoinable = d.mode === "human_vs_human" && d.status === "waiting";
+  const isEnding = d.endsAt && Math.max(0, (new Date(d.endsAt) - Date.now()) / 1000) <= 60;
+
+  return {
+    id: d._id,
+    title: d.topic,
+    tag: d.category || "General",
+    tagColor: tagStyle.color,
+    tagBg: tagStyle.bg,
+    watching: 0,
+    timeLeft: getTimeLeft(d.endsAt, d.status, d.duration, d.createdAt),
+    endsAt: d.endsAt || null,
+    createdAt: d.createdAt || null,
+    duration: d.duration || null,
+    status: d.status,
+    debaterA: toDebater(forSide),
+    debaterB: toDebater(againstSide),
+    isAI: !!(forSide?.user?.isAI || againstSide?.user?.isAI),
+    isJoinable,
+    isEnding,
+    hot: (d.rounds || []).length >= 3,
+  };
+}
+
+/* ─── Live timer badge (updates itself every second) ─── */
+const LiveTimerBadge = ({ endsAt, status, duration, createdAt }) => {
+  const [display, setDisplay] = useState(() => getTimeLeft(endsAt, status, duration, createdAt));
+  const [isUrgent, setIsUrgent] = useState(false);
+
+  useEffect(() => {
+    const tick = () => {
+      if (status === "waiting") {
+        if (!createdAt) {
+          setDisplay(duration ? `${duration} min debate` : "Waiting");
+          return;
+        }
+        const expiresAt = new Date(createdAt).getTime() + WAITING_EXPIRY_MS;
+        const secs = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+        const mins = Math.floor(secs / 60);
+        const s = secs % 60;
+        setDisplay(secs <= 0 ? "Expiring…" : `Closes in ${String(mins).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+        setIsUrgent(secs <= 60 && secs > 0);
+        return;
+      }
+      if (!endsAt) { setDisplay("In progress"); return; }
+      const secs = Math.max(0, Math.round((new Date(endsAt) - Date.now()) / 1000));
+      const mins = Math.floor(secs / 60);
+      const s = secs % 60;
+      setDisplay(secs <= 0 ? "Ending…" : `${String(mins).padStart(2, "0")}:${String(s).padStart(2, "0")} left`);
+      setIsUrgent(secs <= 60 && secs > 0);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [endsAt, status, duration, createdAt]);
+
+  return (
+    <div className={`flex items-center gap-1.5 text-xs font-medium ${isUrgent ? "text-orange-400 font-bold" : status === "waiting" ? "text-yellow-400" : "text-gray-300"}`}>
+      <FaClock className={`${isUrgent ? "text-orange-400 animate-pulse" : status === "waiting" ? "text-yellow-400" : "text-blue-400"}`} />
+      <span>{display}</span>
+    </div>
+  );
+};
 
 /* ─── Avatar helper ─── */
 const Avatar = ({ src, name, size = 48, ring = "ring-violet-500/50" }) => {
@@ -138,26 +150,32 @@ const Avatar = ({ src, name, size = 48, ring = "ring-violet-500/50" }) => {
       alt={name}
       className={`flex-shrink-0 rounded-full ring-2 ${ring} object-cover`}
       style={{ width: size, height: size }}
-      onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4f46e5&color=fff`; }}
+      onError={(e) => {
+        e.target.onerror = null;
+        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4f46e5&color=fff`;
+      }}
     />
   );
 };
 
 /* ─── Debate Card ─── */
-const DebateCard = ({ d }) => (
+const DebateCard = ({ d, onWatch, onJoin, joining }) => (
   <div
     className="rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-violet-900/40 hover:shadow-2xl"
     style={{
       background: "rgba(8,12,30,0.78)",
       backdropFilter: "blur(18px)",
-      border: "1px solid rgba(255,255,255,0.07)",
-      boxShadow: "0 4px 24px rgba(0,0,0,0.35)",
+      border: d.isEnding
+        ? "1px solid rgba(251,146,60,0.45)"
+        : "1px solid rgba(255,255,255,0.07)",
+      boxShadow: d.isEnding
+        ? "0 4px 24px rgba(251,146,60,0.15)"
+        : "0 4px 24px rgba(0,0,0,0.35)",
     }}
   >
     {/* Top row */}
     <div className="flex items-start justify-between gap-3">
       <div className="flex flex-col gap-2 flex-1 min-w-0">
-        {/* Live badge + tag */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase bg-red-500/20 border border-red-500/40 text-red-400">
             <FaCircle className="text-[6px] animate-pulse" />
@@ -171,29 +189,28 @@ const DebateCard = ({ d }) => (
               <FaFire className="text-[8px]" /> HOT
             </span>
           )}
+          {d.isEnding && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 border border-red-500/30 text-red-400 animate-pulse">
+              <FaClock className="text-[8px]" /> ENDING SOON
+            </span>
+          )}
         </div>
-
-        {/* Title */}
         <h3 className="text-white font-extrabold text-base leading-snug">{d.title}</h3>
       </div>
 
-      {/* Stats */}
       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
         <div className="flex items-center gap-1.5 text-gray-400 text-xs">
           <FaEye className="text-violet-400" />
           <span className="text-white font-bold">{d.watching}</span>
           <span>watching</span>
         </div>
-        <div className="flex items-center gap-1.5 text-gray-400 text-xs">
-          <FaClock className="text-blue-400" />
-          <span>{d.timeLeft}</span>
-        </div>
+        {/* ── Live ticking timer per card ── */}
+        <LiveTimerBadge endsAt={d.endsAt} status={d.status} duration={d.duration} createdAt={d.createdAt} />
       </div>
     </div>
 
     {/* VS row */}
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-      {/* Debater A */}
       <div className="flex items-center gap-3">
         <Avatar src={d.debaterA.avatar} name={d.debaterA.name} ring="ring-blue-500/50" />
         <div className="min-w-0">
@@ -204,7 +221,6 @@ const DebateCard = ({ d }) => (
         </div>
       </div>
 
-      {/* VS */}
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm"
         style={{
@@ -216,7 +232,6 @@ const DebateCard = ({ d }) => (
         VS
       </div>
 
-      {/* Debater B */}
       <div className="flex items-center gap-3 flex-row-reverse sm:flex-row justify-end sm:justify-start">
         <div className="min-w-0 text-right sm:text-left">
           <p className="text-white font-bold text-sm truncate">{d.debaterB.name}</p>
@@ -248,7 +263,8 @@ const DebateCard = ({ d }) => (
     {/* Action buttons */}
     <div className="flex gap-2 pt-1">
       <button
-        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold text-sm transition-all hover:brightness-110 active:scale-95"
+        onClick={() => onWatch(d.id)}
+        className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold text-sm transition-all hover:brightness-110 active:scale-95 ${d.isJoinable ? "flex-1" : "w-full"}`}
         style={{
           background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
           boxShadow: "0 4px 16px rgba(124,58,237,0.35)",
@@ -257,41 +273,142 @@ const DebateCard = ({ d }) => (
         <MdLiveTv className="text-base" />
         Watch Live
       </button>
-      <button
-        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:bg-white/10 active:scale-95"
-        style={{ border: "1px solid rgba(255,255,255,0.12)", color: "#e2e8f0" }}
-      >
-        <FaUserFriends className="text-blue-400" />
-        Join Debate
-      </button>
+      {d.isJoinable && (
+        <button
+          onClick={() => onJoin(d.id)}
+          disabled={joining === d.id}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:bg-white/10 active:scale-95 disabled:opacity-60"
+          style={{ border: "1px solid rgba(255,255,255,0.12)", color: "#e2e8f0" }}
+        >
+          <FaUserFriends className="text-blue-400" />
+          {joining === d.id ? "Joining…" : "Join Debate"}
+        </button>
+      )}
     </div>
   </div>
 );
 
 /* ─── Main Page ─── */
 const LiveDebates = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
   const [activeFilter, setActiveFilter] = useState("All");
   const [activeSort, setActiveSort] = useState("Latest");
   const [search, setSearch] = useState("");
 
-  const filtered = debates.filter((d) => {
-    const matchFilter = activeFilter === "All" || d.tag === activeFilter || activeFilter === "Trending";
-    const matchSearch = d.title.toLowerCase().includes(search.toLowerCase()) ||
-      d.debaterA.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.debaterB.name.toLowerCase().includes(search.toLowerCase());
-    return matchFilter && matchSearch;
-  });
+  const [debates, setDebates] = useState([]);
+  const [pageStats, setPageStats] = useState({ debatersOnline: 0, liveCount: 0, totalWatching: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [joining, setJoining] = useState(null);
+  const [startingDebate, setStartingDebate] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  const fetchDebates = useCallback(() => {
+    setLoading(true);
+    setError("");
+    debateApi
+      .list({
+        category: activeFilter !== "All" ? activeFilter : "",
+        sort: activeSort,
+        search,
+      })
+      .then((res) => {
+        const rawDebates = (res.debates || []).filter(
+          (d) => d.status === "waiting" || d.status === "live"
+        );
+        setDebates(rawDebates.map(toCardShape));
+        setPageStats({
+          debatersOnline: 0,
+          liveCount: rawDebates.filter((d) => d.status === "live").length,
+          totalWatching: 0,
+        });
+      })
+      .catch((err) => setError(err.message || "Couldn't load live debates."))
+      .finally(() => setLoading(false));
+  }, [activeFilter, activeSort, search]);
+
+  useEffect(() => {
+    fetchDebates();
+    const interval = setInterval(fetchDebates, 20000);
+    return () => clearInterval(interval);
+  }, [fetchDebates]);
+
+  const requireAuth = (onGo) => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: "/livedebates" } });
+      return;
+    }
+    onGo();
+  };
+
+  const handleWatch = (debateId) => navigate(`/debate/${debateId}`);
+
+  const handleJoin = (debateId) => {
+    requireAuth(async () => {
+      try {
+        setJoining(debateId);
+        const res = await debateApi.join(debateId);
+        const id = res?.debate?._id || res?.data?.debateId || debateId;
+        navigate(`/debate/${id}`);
+      } catch (err) {
+        setError(err.message || "Couldn't join the debate.");
+      } finally {
+        setJoining(null);
+      }
+    });
+  };
+
+  const handleStartDebate = () => {
+    requireAuth(() => setShowModal(true));
+  };
+
+  const handleModalSubmit = async ({ topic, side, category, duration, mode }) => {
+    try {
+      setStartingDebate(true);
+      setError("");
+      const res = await debateApi.create(mode, topic, side, { category, duration });
+      if (!res?.debate?._id && !res?.data?.debateId) {
+        throw new Error("Debate was created but no ID was returned.");
+      }
+      setShowModal(false);
+      // For human_vs_human, refresh list so room appears as joinable
+      if (mode === "human_vs_human") {
+        await fetchDebates();
+      } else {
+        // For human_vs_ai, go straight into the room
+        const id = res?.debate?._id || res?.data?.debateId;
+        navigate(`/debate/${id}`);
+      }
+    } catch (err) {
+      setError(err.message || "Couldn't start a debate.");
+    } finally {
+      setStartingDebate(false);
+    }
+  };
+
+  const handleWatchRandom = () => {
+    if (debates.length === 0) return;
+    const random = debates[Math.floor(Math.random() * debates.length)];
+    navigate(`/debate/${random.id}`);
+  };
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden" style={{ fontFamily: "'Exo 2', sans-serif" }}>
-
-      {/* ── AI Background (fixed, behind everything) ── */}
       <AIBackground fixed={true} />
 
-      {/* ── All content at z-10+ ── */}
+      {/* Create Debate Modal */}
+      {showModal && (
+        <CreateDebateModal
+          onClose={() => setShowModal(false)}
+          onSubmit={handleModalSubmit}
+          loading={startingDebate}
+        />
+      )}
+
       <div className="relative z-10 min-h-screen flex flex-col">
-        
-        {/* ══ PAGE CONTENT ══ */}
         <main className="flex-1 w-full max-w-6xl mx-auto px-4 md:px-6 py-8">
 
           {/* Header */}
@@ -306,27 +423,25 @@ const LiveDebates = () => {
               </div>
               <span className="text-gray-400 text-sm font-medium">{debates.length} active debates</span>
             </div>
-            <h1
-              className="text-4xl md:text-5xl font-black leading-tight mb-2"
-              style={{ textShadow: "0 0 40px rgba(124,58,237,0.3)" }}
-            >
+            <h1 className="text-4xl md:text-5xl font-black leading-tight mb-2" style={{ textShadow: "0 0 40px rgba(124,58,237,0.3)" }}>
               Live Debates
             </h1>
             <p className="text-gray-400 text-base">Join or watch ongoing debates happening now</p>
           </div>
 
-          {/* Filters + Search row */}
+          {error && (
+            <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+          )}
+
+          {/* Filters + Search */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-            {/* Filter pills */}
             <div className="flex items-center gap-2 flex-wrap">
               {filters.map((f) => (
                 <button
                   key={f.label}
                   onClick={() => setActiveFilter(f.label)}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 ${
-                    activeFilter === f.label
-                      ? "text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                    activeFilter === f.label ? "text-white" : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                   style={activeFilter === f.label ? {
                     background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
@@ -342,9 +457,7 @@ const LiveDebates = () => {
               ))}
             </div>
 
-            {/* Search + Sort */}
             <div className="flex items-center gap-2">
-              {/* Search */}
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl min-w-[180px]"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
@@ -358,16 +471,12 @@ const LiveDebates = () => {
                 />
               </div>
 
-              {/* Sort dropdown */}
               <div className="relative">
                 <select
                   value={activeSort}
                   onChange={(e) => setActiveSort(e.target.value)}
                   className="appearance-none pl-3 pr-8 py-1.5 rounded-xl text-xs font-semibold text-white outline-none cursor-pointer"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
                 >
                   {sortOptions.map((o) => (
                     <option key={o} value={o} style={{ background: "#0a0f1e" }}>{`Sort by: ${o}`}</option>
@@ -381,27 +490,27 @@ const LiveDebates = () => {
           {/* Stats bar */}
           <div
             className="grid grid-cols-3 gap-3 mb-6 rounded-2xl p-4"
-            style={{
-              background: "rgba(8,12,30,0.7)",
-              backdropFilter: "blur(16px)",
-              border: "1px solid rgba(255,255,255,0.06)",
-            }}
+            style={{ background: "rgba(8,12,30,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.06)" }}
           >
             {[
-              { icon: <FaUsers className="text-violet-400" />, value: "1,247", label: "Debaters Online" },
-              { icon: <MdLiveTv className="text-red-400" />,   value: debates.length.toString(), label: "Live Debates" },
-              { icon: <FaEye className="text-blue-400" />,     value: debates.reduce((a, d) => a + d.watching, 0).toLocaleString(), label: "Total Watching" },
+              { icon: <FaUsers className="text-violet-400" />, value: pageStats.debatersOnline.toLocaleString(), label: "Debaters Online" },
+              { icon: <MdLiveTv className="text-red-400" />,   value: pageStats.liveCount.toString(),            label: "Live Debates" },
+              { icon: <FaEye className="text-blue-400" />,     value: pageStats.totalWatching.toLocaleString(),  label: "Total Watching" },
             ].map((s) => (
               <div key={s.label} className="flex flex-col items-center gap-1 text-center">
                 <span className="text-lg">{s.icon}</span>
-                <span className="text-white font-black text-xl">{s.value}</span>
+                <span className={`text-white font-black text-xl ${loading ? "animate-pulse" : ""}`}>{s.value}</span>
                 <span className="text-gray-500 text-xs">{s.label}</span>
               </div>
             ))}
           </div>
 
-          {/* Debate cards grid */}
-          {filtered.length === 0 ? (
+          {/* Cards grid */}
+          {loading ? (
+            <div className="text-center py-20 text-gray-500">
+              <p className="text-sm">Loading live debates…</p>
+            </div>
+          ) : debates.length === 0 ? (
             <div className="text-center py-20 text-gray-500">
               <FaSearch className="text-4xl mx-auto mb-3 opacity-30" />
               <p className="text-lg font-bold">No debates found</p>
@@ -409,8 +518,8 @@ const LiveDebates = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {filtered.map((d) => (
-                <DebateCard key={d.id} d={d} />
+              {debates.map((d) => (
+                <DebateCard key={d.id} d={d} onWatch={handleWatch} onJoin={handleJoin} joining={joining} />
               ))}
             </div>
           )}
@@ -430,15 +539,15 @@ const LiveDebates = () => {
             </div>
             <div className="flex gap-3">
               <button
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:brightness-110 transition-all"
-                style={{
-                  background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
-                  boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-                }}
+                onClick={handleStartDebate}
+                disabled={startingDebate}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:brightness-110 transition-all disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
               >
-                <FaBolt /> Start Debate
+                <FaBolt /> {startingDebate ? "Starting…" : "Start Debate"}
               </button>
               <button
+                onClick={handleWatchRandom}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-white/10 transition-all"
                 style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#e2e8f0" }}
               >
@@ -449,11 +558,7 @@ const LiveDebates = () => {
 
         </main>
 
-        {/* ══ FOOTER ══ */}
-        <footer
-          className="text-center py-4 text-gray-600 text-xs"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-        >
+        <footer className="text-center py-4 text-gray-600 text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
           © 2026 DebateAI · All rights reserved
         </footer>
       </div>

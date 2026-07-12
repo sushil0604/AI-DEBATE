@@ -1,103 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaSearch, FaMicrochip, FaLandmark, FaFlask, FaGraduationCap,
   FaHeartbeat, FaBalanceScale, FaGlobeAmericas, FaFilm, FaCoins,
   FaChevronRight,
 } from "react-icons/fa";
 import PageShell from "../Pages/PageShell";
+import { topicsApi } from "../../services/api";
 
-const categories = [
-  {
-    name: "Technology",
-    icon: <FaMicrochip />,
-    color: "#3b82f6",
-    bg: "rgba(59,130,246,0.1)",
-    border: "rgba(59,130,246,0.25)",
-    debateCount: 142,
-    topics: ["AI Ethics & Rights", "Social Media Regulation", "Crypto's Future", "Privacy vs Innovation"],
-  },
-  {
-    name: "Politics",
-    icon: <FaLandmark />,
-    color: "#f59e0b",
-    bg: "rgba(245,158,11,0.1)",
-    border: "rgba(245,158,11,0.25)",
-    debateCount: 98,
-    topics: ["Electoral Reform", "Free Speech Limits", "Immigration Policy", "Term Limits"],
-  },
-  {
-    name: "Science",
-    icon: <FaFlask />,
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.1)",
-    border: "rgba(34,197,94,0.25)",
-    debateCount: 76,
-    topics: ["Climate Action Pace", "Gene Editing Ethics", "Space Exploration Funding", "Nuclear Energy"],
-  },
-  {
-    name: "Education",
-    icon: <FaGraduationCap />,
-    color: "#a855f7",
-    bg: "rgba(168,85,247,0.1)",
-    border: "rgba(168,85,247,0.25)",
-    debateCount: 54,
-    topics: ["Standardized Testing", "College Debt Forgiveness", "AI in Classrooms", "Homeschooling"],
-  },
-  {
-    name: "Health",
-    icon: <FaHeartbeat />,
-    color: "#ef4444",
-    bg: "rgba(239,68,68,0.1)",
-    border: "rgba(239,68,68,0.25)",
-    debateCount: 61,
-    topics: ["Universal Healthcare", "Mental Health Funding", "Vaccine Mandates", "Diet Science"],
-  },
-  {
-    name: "Ethics & Law",
-    icon: <FaBalanceScale />,
-    color: "#06b6d4",
-    bg: "rgba(6,182,212,0.1)",
-    border: "rgba(6,182,212,0.25)",
-    debateCount: 88,
-    topics: ["Death Penalty", "Animal Rights", "Surveillance Laws", "Restorative Justice"],
-  },
-  {
-    name: "Society",
-    icon: <FaGlobeAmericas />,
-    color: "#ec4899",
-    bg: "rgba(236,72,153,0.1)",
-    border: "rgba(236,72,153,0.25)",
-    debateCount: 103,
-    topics: ["Work-Life Balance", "Urbanization", "Gender Roles Today", "Aging Population"],
-  },
-  {
-    name: "Culture",
-    icon: <FaFilm />,
-    color: "#f97316",
-    bg: "rgba(249,115,22,0.1)",
-    border: "rgba(249,115,22,0.25)",
-    debateCount: 47,
-    topics: ["AI-Generated Art", "Streaming vs Theaters", "Cancel Culture", "Nostalgia Marketing"],
-  },
-  {
-    name: "Economics",
-    icon: <FaCoins />,
-    color: "#eab308",
-    bg: "rgba(234,179,8,0.1)",
-    border: "rgba(234,179,8,0.25)",
-    debateCount: 69,
-    topics: ["Universal Basic Income", "Wealth Tax", "Remote Work Economics", "Minimum Wage"],
-  },
-];
+const iconMap = {
+  microchip: <FaMicrochip />,
+  landmark: <FaLandmark />,
+  flask: <FaFlask />,
+  "graduation-cap": <FaGraduationCap />,
+  heartbeat: <FaHeartbeat />,
+  "balance-scale": <FaBalanceScale />,
+  globe: <FaGlobeAmericas />,
+  film: <FaFilm />,
+  coins: <FaCoins />,
+};
 
 const Topics = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    topicsApi
+      .list()
+      .then((res) => setCategories(res.data.categories || []))
+      .catch((err) => setError(err.message || "Couldn't load topics."))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = categories.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.topics.some((t) => t.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const handleCategoryClick = (categoryName) => {
+    navigate(`/livedebates?category=${encodeURIComponent(categoryName)}`);
+  };
 
   return (
     <PageShell
@@ -119,7 +65,15 @@ const Topics = () => {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {error && (
+        <div className="mb-6 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-500 text-sm">Loading topics…</div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
           <FaSearch className="text-4xl mx-auto mb-3 opacity-30" />
           <p className="text-lg font-bold">No topics found</p>
@@ -130,6 +84,7 @@ const Topics = () => {
           {filtered.map((c) => (
             <div
               key={c.name}
+              onClick={() => handleCategoryClick(c.name)}
               className="rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer group"
               style={{
                 background: "rgba(8,12,30,0.78)",
@@ -143,7 +98,7 @@ const Topics = () => {
                   className="w-11 h-11 rounded-xl flex items-center justify-center text-lg"
                   style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color }}
                 >
-                  {c.icon}
+                  {iconMap[c.icon] || <FaGlobeAmericas />}
                 </div>
                 <span className="text-gray-500 text-xs font-semibold">{c.debateCount} debates</span>
               </div>

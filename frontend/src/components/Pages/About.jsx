@@ -1,11 +1,15 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaRobot, FaUsers, FaGlobeAmericas, FaBalanceScale, FaLightbulb } from "react-icons/fa";
 import PageShell from "../Pages/PageShell";
+import { statsApi } from "../../services/api";
+import { useAuth } from "../../hooks/useAuth";
 
-const stats = [
-  { value: "48,000+", label: "Debates Hosted" },
-  { value: "120+", label: "Countries" },
-  { value: "9,400", label: "Active Debaters" },
-  { value: "99.2%", label: "Fair-Judging Score" },
+const DEFAULT_STATS = [
+  { value: "48,000+", label: "Debates Hosted", key: "debatesHosted" },
+  { value: "120+", label: "Countries", key: "countries" },
+  { value: "9,400", label: "Active Debaters", key: "activeDebaters" },
+  { value: "99.2%", label: "Fair-Judging Score", key: "fairJudgingScore" },
 ];
 
 const values = [
@@ -30,6 +34,39 @@ const values = [
 ];
 
 const About = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
+  const [stats, setStats] = useState(DEFAULT_STATS);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    statsApi
+      .platform()
+      .then((res) => {
+        const d = res.data;
+        setStats([
+          { value: d.debatesHosted,   label: "Debates Hosted",     key: "debatesHosted" },
+          { value: d.countries,       label: "Countries",          key: "countries" },
+          { value: d.activeDebaters,  label: "Active Debaters",    key: "activeDebaters" },
+          { value: d.fairJudgingScore,label: "Fair-Judging Score", key: "fairJudgingScore" },
+        ]);
+      })
+      .catch(() => {
+        // fall back silently to DEFAULT_STATS if endpoint isn't ready yet
+      })
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  const handleJoinArena = () => {
+    if (authLoading) return;
+    if (isAuthenticated) {
+      navigate("/");
+    } else {
+      navigate("/signup");
+    }
+  };
+
   return (
     <PageShell
       eyebrow="OUR MISSION"
@@ -72,8 +109,10 @@ const About = () => {
         style={{ background: "rgba(8,12,30,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         {stats.map((s) => (
-          <div key={s.label} className="flex flex-col items-center text-center">
-            <span className="text-white font-black text-2xl mb-1">{s.value}</span>
+          <div key={s.key} className="flex flex-col items-center text-center">
+            <span className={`text-white font-black text-2xl mb-1 ${statsLoading ? "animate-pulse" : ""}`}>
+              {s.value}
+            </span>
             <span className="text-gray-500 text-xs">{s.label}</span>
           </div>
         ))}
@@ -121,10 +160,11 @@ const About = () => {
           </div>
         </div>
         <button
+          onClick={handleJoinArena}
           className="px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:brightness-110 transition-all flex-shrink-0"
           style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
         >
-          Create Free Account
+          {isAuthenticated ? "Go to Debates" : "Create Free Account"}
         </button>
       </div>
     </PageShell>

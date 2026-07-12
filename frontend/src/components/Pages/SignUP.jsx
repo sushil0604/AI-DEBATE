@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FaUser, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaRobot, FaGoogle, FaGithub, FaCheck } from "react-icons/fa";
 import AIBackground from "../Home/AIBackground";
+import { authApi } from "../../services/api";
 
 const passwordChecks = [
   { label: "At least 8 characters", test: (pw) => pw.length >= 8 },
@@ -10,19 +11,48 @@ const passwordChecks = [
 ];
 
 const SignUp = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const allChecksPassed = passwordChecks.every((c) => c.test(form.password));
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!agreed) return;
-    // Hook up actual auth logic here
-    console.log("Sign up attempt:", form);
+    setError("");
+
+    if (!allChecksPassed) {
+      setError("Password doesn't meet all requirements yet.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const res = await authApi.register(form.name, form.email, form.password);
+      localStorage.setItem("token", res.token);
+
+      const redirectTo = location.state?.from || "/";
+      navigate(redirectTo, { replace: true, state: location.state?.intent ? { intent: location.state.intent } : undefined });
+    } catch (err) {
+      setError(err.message || "Couldn't create your account. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  const handleOAuth = (provider) => {
+    window.location.href = `${API_BASE}/auth/${provider}`;
   };
 
   return (
@@ -58,6 +88,12 @@ const SignUp = () => {
         >
           <h1 className="text-white font-extrabold text-2xl mb-1">Create your account</h1>
           <p className="text-gray-400 text-sm mb-6">Your first debate is free, no card required</p>
+
+          {error && (
+            <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Name */}
@@ -173,11 +209,11 @@ const SignUp = () => {
             {/* Submit */}
             <button
               type="submit"
-              disabled={!agreed}
+              disabled={!agreed || submitting}
               className="mt-1 py-2.5 rounded-xl text-white font-bold text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
             >
-              Create Account
+              {submitting ? "Creating account…" : "Create Account"}
             </button>
           </form>
 
@@ -191,12 +227,14 @@ const SignUp = () => {
           {/* Social */}
           <div className="grid grid-cols-2 gap-3">
             <button
+              onClick={() => handleOAuth("google")}
               className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-white/10 transition-all"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
             >
               <FaGoogle className="text-sm" /> Google
             </button>
             <button
+              onClick={() => handleOAuth("github")}
               className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white hover:bg-white/10 transition-all"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
             >

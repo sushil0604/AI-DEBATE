@@ -11,6 +11,7 @@ import Pricing from './components/Pages/Pricing'
 import About from './components/Pages/About'
 import Login from './components/Pages/Login'
 import SignUp from './components/Pages/SignUp'
+import DebateRoom from './components/Pages/DebateRoom'
 
 const App = () => {
   return (
@@ -22,11 +23,14 @@ const App = () => {
         <Route path="/topics" element={<Topics />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/ai-coach" element={<AICoach />} />
+        <Route path="/ai-coach/sample" element={<AICoach />} />
         <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/debate/:debateId" element={<DebateRoom />} />
+        <Route path="/map" element={<Topics />} />
       </Routes>
     </BrowserRouter>
   )
