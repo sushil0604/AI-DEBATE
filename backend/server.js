@@ -24,11 +24,24 @@ const { handleWebhook } = require("./controllers/paymentController");
 const app = express();
 const server = http.createServer(app);
 
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://ai-debate-blue.vercel.app",
+];
 
 const io = new Server(server, {
-  cors: { origin: CLIENT_URL, credentials: true },
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
 });
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 
 connectDB().then(() => {
   startDebateCleanup(); // ← NEW: runs immediately, then every 60s
@@ -36,7 +49,6 @@ connectDB().then(() => {
 
 // --- Global middleware ---
 app.use(helmet());
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 const apiLimiter = rateLimit({
