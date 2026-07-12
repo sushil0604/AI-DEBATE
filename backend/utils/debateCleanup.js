@@ -17,6 +17,7 @@ async function cleanupStaleDebates() {
 
     // 2. Delete live rooms whose endsAt has passed (timer expired but wasn't cleaned up)
     const liveExpired = await Debate.deleteMany({
+      
       status: "live",
       endsAt: { $lt: new Date(now) },
     });
