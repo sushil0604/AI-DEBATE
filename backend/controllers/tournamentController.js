@@ -2,6 +2,32 @@ const asyncHandler = require("express-async-handler");
 const Tournament = require("../models/Tournament");
 const Debate = require("../models/Debate");
 
+// Maps frontend tab values to actual schema status values
+const STATUS_MAP = {
+  upcoming: ["registration_open", "upcoming"],
+  in_progress: ["in_progress"],
+  past: ["completed"],
+};
+
+// Reshapes a tournament document into what the frontend expects
+const shapeTournament = (t) => {
+  const isPast = ["completed", "cancelled"].includes(t.status);
+  const isInProgress = t.status === "in_progress";
+
+  return {
+    id: t._id,
+    name: t.name,
+    category: t.topic || "General",
+    round: isInProgress ? "In Progress" : t.description || "",
+    players: t.participants.length,
+    maxPlayers: t.maxParticipants,
+    prize: t.prize || "TBD",
+    date: t.startDate ? new Date(t.startDate).toLocaleDateString() : "",
+    hot: t.participants.length >= Math.ceil(t.maxParticipants * 0.75) && !isPast,
+    status: isPast ? "past" : isInProgress ? "in_progress" : "upcoming",
+  };
+};
+
 // @desc    Create tournament
 // @route   POST /api/tournaments
 // @access  Private
@@ -33,14 +59,20 @@ const createTournament = asyncHandler(async (req, res) => {
 // @access  Public
 const getTournaments = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.status) filter.status = req.query.status;
+  if (req.query.status && STATUS_MAP[req.query.status]) {
+    filter.status = { $in: STATUS_MAP[req.query.status] };
+  }
 
   const tournaments = await Tournament.find(filter)
     .populate("createdBy", "name avatar")
     .populate("participants", "name avatar rating")
     .sort({ startDate: 1 });
 
-  res.json({ success: true, count: tournaments.length, tournaments });
+  res.json({
+    success: true,
+    count: tournaments.length,
+    tournaments: tournaments.map(shapeTournament),
+  });
 });
 
 // @desc    Get tournament by id
