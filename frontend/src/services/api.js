@@ -55,7 +55,7 @@ export const debateRoomApi = {
 };
 export const tournamentApi = {
   list: (status) => api.get(`/tournaments?status=${encodeURIComponent(status)}`),
-  register: (tournamentId) => api.post(`/tournaments/${tournamentId}/register`),
+  register: (tournamentId) => api.post(`/tournaments/${tournamentId}/join`),
 };
 export const debateApi = {
   create: (mode, topic, side, options = {}) =>
