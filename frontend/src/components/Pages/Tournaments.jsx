@@ -27,15 +27,15 @@ const Tournaments = () => {
   const [error, setError] = useState("");
   const [registering, setRegistering] = useState(null);
 
- useEffect(() => {
-  setLoading(true);
-  setError("");
-  tournamentApi
-    .list(activeTab)
-    .then((res) => setTournaments(res.tournaments || []))
-    .catch((err) => setError(err.message || "Couldn't load tournaments."))
-    .finally(() => setLoading(false));
-}, [activeTab]);
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    tournamentApi
+      .list(activeTab)
+      .then((res) => setTournaments(res.tournaments || []))
+      .catch((err) => setError(err.message || "Couldn't load tournaments."))
+      .finally(() => setLoading(false));
+  }, [activeTab]);
 
   const handleAction = async (t) => {
     if (t.status === "past") {
@@ -54,18 +54,18 @@ const Tournaments = () => {
       return;
     }
 
- try {
-  setRegistering(t.id);
-  setError("");
-  await tournamentApi.register(t.id);
-  // Refresh the list so the player count updates
-  const res = await tournamentApi.list(activeTab);
-  setTournaments(res.tournaments || []);   // <-- changed from res.data.tournaments
-} catch (err) {
-  setError(err.message || "Couldn't register for this tournament.");
-} finally {
-  setRegistering(null);
-}
+    try {
+      setRegistering(t.id);
+      setError("");
+      await tournamentApi.register(t.id);
+      // Refresh the list so the player count updates
+      const res = await tournamentApi.list(activeTab);
+      setTournaments(res.tournaments || []);
+    } catch (err) {
+      setError(err.message || "Couldn't register for this tournament.");
+    } finally {
+      setRegistering(null);
+    }
   };
 
   return (
