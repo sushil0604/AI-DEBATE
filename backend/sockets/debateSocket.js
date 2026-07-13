@@ -284,6 +284,14 @@ function registerDebateSocket(io) {
           name: socket.user.name,
         });
 
+        // If this join made the debate go live, notify everyone in the room
+        if (debate.status === "live" && debate.startedAt) {
+          const justStarted = (Date.now() - new Date(debate.startedAt).getTime()) < 5000;
+          if (justStarted) {
+            io.to(`debate:${debateId}`).emit("debate_started", { debateId });
+          }
+        }
+
         // Start timer for any live debate that has an endsAt set
         if (debate.status === "live" && debate.endsAt) {
           startDebateTimer(io, debateId);

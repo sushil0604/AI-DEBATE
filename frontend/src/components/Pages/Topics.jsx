@@ -27,13 +27,20 @@ const Topics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    topicsApi
-      .list()
-      .then((res) => setCategories(res.data.categories || []))
-      .catch((err) => setError(err.message || "Couldn't load topics."))
-      .finally(() => setLoading(false));
-  }, []);
+useEffect(() => {
+  topicsApi
+    .list()
+    .then((res) => {
+      const cats =
+        res?.data?.categories ||
+        res?.categories ||
+        res?.data ||
+        [];
+      setCategories(Array.isArray(cats) ? cats : []);
+    })
+    .catch((err) => setError(err.message || "Couldn't load topics."))
+    .finally(() => setLoading(false));
+}, []);
 
   const filtered = categories.filter(
     (c) =>

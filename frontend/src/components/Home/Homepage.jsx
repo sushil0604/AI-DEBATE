@@ -81,7 +81,6 @@ const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
           </div>
         )}
 
-        {/* Topic */}
         <label className="text-gray-400 text-xs font-semibold mb-1.5 block">Debate topic</label>
         <input
           autoFocus
@@ -91,7 +90,6 @@ const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
           className="w-full mb-4 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-gray-500 outline-none focus:border-violet-500/50"
         />
 
-        {/* Side */}
         <label className="text-gray-400 text-xs font-semibold mb-1.5 block">Your side</label>
         <div className="grid grid-cols-2 gap-3 mb-5">
           {["for", "against"].map((s) => (
@@ -112,7 +110,6 @@ const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
           ))}
         </div>
 
-        {/* Duration */}
         <label className="text-gray-400 text-xs font-semibold mb-1.5 flex items-center gap-1.5">
           <FaClock className="text-blue-400" /> Debate Duration
         </label>
@@ -124,9 +121,7 @@ const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
               className="flex flex-col items-center gap-0.5 py-3 rounded-xl transition-all"
               style={{
                 background: duration === d.value ? "rgba(124,58,237,0.2)" : "rgba(255,255,255,0.04)",
-                border: duration === d.value
-                  ? "1px solid rgba(124,58,237,0.6)"
-                  : "1px solid rgba(255,255,255,0.08)",
+                border: duration === d.value ? "1px solid rgba(124,58,237,0.6)" : "1px solid rgba(255,255,255,0.08)",
               }}
             >
               <span className={`text-sm font-black ${duration === d.value ? "text-violet-300" : "text-gray-300"}`}>
@@ -137,7 +132,6 @@ const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
           ))}
         </div>
 
-        {/* Submit */}
         <button
           onClick={handleConfirm}
           disabled={!topic.trim() || submitting}
@@ -158,11 +152,9 @@ const Homepage = () => {
 
   const [activeTopic, setActiveTopic] = useState("All Topics");
   const [search, setSearch] = useState("");
-
   const [stats, setStats] = useState(DEFAULT_STATS);
   const [biasLevel, setBiasLevel] = useState("Low");
   const [statsLoading, setStatsLoading] = useState(true);
-
   const [modalMode, setModalMode] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -196,14 +188,11 @@ const Homepage = () => {
     setModalMode(mode);
   };
 
-  /* duration is now passed from the modal */
   const handleConfirmStart = async (topic, side, duration) => {
     try {
       setSubmitting(true);
       setModalError("");
       const res = await debateApi.create(modalMode, topic, side, { duration });
-
-      console.log("Create debate response:", res);
 
       const debateId =
         res?.data?.debateId ||
@@ -220,11 +209,8 @@ const Homepage = () => {
 
       setModalMode(null);
 
-      if (modalMode === "human_vs_human") {
-        navigate("/livedebates");
-      } else {
-        navigate(`/debate/${debateId}`);
-      }
+      // Send creator directly into the room so they receive debate_started event
+      navigate(`/debate/${debateId}`);
     } catch (err) {
       console.error("Start debate error:", err);
       setModalError(err.message || "Couldn't start the debate. Try again.");
@@ -263,38 +249,25 @@ const Homepage = () => {
       <section className="relative h-screen overflow-hidden">
         <div
           className="absolute inset-0 z-10"
-          style={{
-            background: "radial-gradient(ellipse at 70% 50%, rgba(0,0,0,0) 0%, rgba(4,6,20,0.6) 100%)",
-          }}
+          style={{ background: "radial-gradient(ellipse at 70% 50%, rgba(0,0,0,0) 0%, rgba(4,6,20,0.6) 100%)" }}
         />
-
         <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
           <div className="h-px w-12 bg-gradient-to-r from-transparent to-violet-400" />
-          <span className="text-[10px] tracking-[0.3em] text-violet-300/80 uppercase font-semibold">
-            World Debate Map
-          </span>
+          <span className="text-[10px] tracking-[0.3em] text-violet-300/80 uppercase font-semibold">World Debate Map</span>
           <div className="h-px w-12 bg-gradient-to-l from-transparent to-violet-400" />
         </div>
 
         <div className="relative z-20 flex flex-col justify-center h-full pt-16 pb-8 px-8 md:px-16 max-w-lg">
-          <h1
-            className="text-5xl md:text-6xl font-black leading-tight mb-4"
-            style={{ textShadow: "0 0 40px rgba(65,33,121,0.6)" }}
-          >
-            Debate
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-violet-200 to-blue-300">
-              Without Borders
-            </span>
+          <h1 className="text-5xl md:text-6xl font-black leading-tight mb-4" style={{ textShadow: "0 0 40px rgba(65,33,121,0.6)" }}>
+            Debate<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-violet-200 to-blue-300">Without Borders</span>
           </h1>
           <p className="text-gray-300 text-sm md:text-base mb-7 max-w-sm leading-relaxed">
             Join active debates happening around the world and let AI evaluate your arguments.
           </p>
 
           {error && (
-            <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
-              {error}
-            </div>
+            <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
           )}
 
           <div className="flex flex-wrap gap-3">
@@ -302,60 +275,35 @@ const Homepage = () => {
               onClick={() => openStartDebate("human_vs_ai")}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:scale-105 transition-transform"
               style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.45)" }}
-            >
-              ⚡ Start Debate
-            </button>
+            >⚡ Start Debate</button>
             <button
               onClick={() => navigate("/topics")}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
-            >
-              🌐 Explore Map
-            </button>
+            >🌐 Explore Map</button>
             <button
               onClick={() => navigate("/livedebates")}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
-            >
-              ▷ Watch Live
-            </button>
+            >▷ Watch Live</button>
           </div>
         </div>
       </section>
 
       <div className="relative z-10 w-full">
-        <nav
-          className="w-full px-6 py-3 flex items-center gap-2 flex-wrap"
-          style={{
-            background: "rgba(6,9,24,0.82)",
-            backdropFilter: "blur(12px)",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
+        <nav className="w-full px-6 py-3 flex items-center gap-2 flex-wrap" style={{ background: "rgba(6,9,24,0.82)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
           {topics.map((t) => (
             <button
               key={t.label}
               onClick={() => setActiveTopic(t.label)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
-                activeTopic === t.label ? "text-white" : "text-gray-400 hover:text-white hover:bg-white/10"
-              }`}
-              style={
-                activeTopic === t.label
-                  ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 0 18px rgba(124,58,237,0.4)" }
-                  : {}
-              }
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${activeTopic === t.label ? "text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
+              style={activeTopic === t.label ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 0 18px rgba(124,58,237,0.4)" } : {}}
             >
               <span className="text-base">{t.icon}</span>
               {t.label}
             </button>
           ))}
-
           <div className="ml-auto flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 min-w-[160px]">
             <FaSearch className="text-gray-400 text-sm" />
-            <input
-              className="bg-transparent text-sm text-white placeholder-gray-500 outline-none w-full"
-              placeholder="Search Debate"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none w-full" placeholder="Search Debate" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </nav>
 
@@ -364,121 +312,46 @@ const Homepage = () => {
 
             <div className="lg:col-span-4 rounded-2xl md:w-350 p-8 ml-14">
               <div className="mb-6">
-                <h2 className="text-white text-2xl font-extrabold tracking-wide uppercase">
-                  Choose Your Challenge
-                </h2>
+                <h2 className="text-white text-2xl font-extrabold tracking-wide uppercase">Choose Your Challenge</h2>
                 <p className="text-gray-400 text-sm mt-1">Pick a mode and start debating now</p>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div
-                  className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}
-                >
-                  <div className="flex items-center gap-2 text-white font-bold text-base">
-                    <FaUserFriends className="text-blue-400 text-xl" />
-                    Human vs Human
-                  </div>
-                  <p className="text-gray-400 text-xs leading-relaxed">
-                    Debate against real people from around the world.
-                  </p>
-                  <button
-                    onClick={() => openStartDebate("human_vs_human")}
-                    className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200"
-                    style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)", boxShadow: "0 4px 16px rgba(37,99,235,0.3)" }}
-                  >
-                    Start Match
-                  </button>
+                <div className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <div className="flex items-center gap-2 text-white font-bold text-base"><FaUserFriends className="text-blue-400 text-xl" />Human vs Human</div>
+                  <p className="text-gray-400 text-xs leading-relaxed">Debate against real people from around the world.</p>
+                  <button onClick={() => openStartDebate("human_vs_human")} className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200" style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)", boxShadow: "0 4px 16px rgba(37,99,235,0.3)" }}>Start Match</button>
                 </div>
-
-                <div
-                  className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200"
-                  style={{
-                    background: "linear-gradient(145deg,rgba(124,58,237,0.18),rgba(79,70,229,0.1))",
-                    border: "1px solid rgba(124,58,237,0.35)",
-                  }}
-                >
-                  <div className="flex items-center gap-2 text-white font-bold text-base">
-                    <FaRobot className="text-purple-400 text-xl" />
-                    Human vs AI
-                  </div>
-                  <p className="text-gray-400 text-xs leading-relaxed">
-                    Challenge our advanced AI judge in a debate.
-                  </p>
-                  <button
-                    onClick={() => openStartDebate("human_vs_ai")}
-                    className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200"
-                    style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
-                  >
-                    Challenge AI
-                  </button>
+                <div className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200" style={{ background: "linear-gradient(145deg,rgba(124,58,237,0.18),rgba(79,70,229,0.1))", border: "1px solid rgba(124,58,237,0.35)" }}>
+                  <div className="flex items-center gap-2 text-white font-bold text-base"><FaRobot className="text-purple-400 text-xl" />Human vs AI</div>
+                  <p className="text-gray-400 text-xs leading-relaxed">Challenge our advanced AI judge in a debate.</p>
+                  <button onClick={() => openStartDebate("human_vs_ai")} className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200" style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}>Challenge AI</button>
                 </div>
-
-                <div
-                  className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200"
-                  style={{
-                    background: "linear-gradient(145deg,rgba(13,148,136,0.18),rgba(6,95,70,0.1))",
-                    border: "1px solid rgba(20,184,166,0.3)",
-                  }}
-                >
-                  <div className="flex items-center gap-2 text-white font-bold text-base">
-                    <FaBolt className="text-teal-400 text-xl" />
-                    AI vs AI
-                  </div>
-                  <p className="text-gray-400 text-xs leading-relaxed">
-                    Watch AI models debate with each other.
-                  </p>
-                  <button
-                    onClick={() => openStartDebate("ai_vs_ai")}
-                    className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200"
-                    style={{ background: "linear-gradient(135deg,#0d9488,#0f766e)", boxShadow: "0 4px 16px rgba(13,148,136,0.35)" }}
-                  >
-                    Watch AI Debate
-                  </button>
+                <div className="rounded-xl p-5 flex flex-col gap-3 hover:-translate-y-1 transition-transform duration-200" style={{ background: "linear-gradient(145deg,rgba(13,148,136,0.18),rgba(6,95,70,0.1))", border: "1px solid rgba(20,184,166,0.3)" }}>
+                  <div className="flex items-center gap-2 text-white font-bold text-base"><FaBolt className="text-teal-400 text-xl" />AI vs AI</div>
+                  <p className="text-gray-400 text-xs leading-relaxed">Watch AI models debate with each other.</p>
+                  <button onClick={() => openStartDebate("ai_vs_ai")} className="mt-auto w-full py-2 rounded-lg text-white font-bold text-sm hover:brightness-110 transition-all duration-200" style={{ background: "linear-gradient(135deg,#0d9488,#0f766e)", boxShadow: "0 4px 16px rgba(13,148,136,0.35)" }}>Watch AI Debate</button>
                 </div>
               </div>
             </div>
 
-            <div
-              className="col-span-5 rounded-2xl p-6 flex flex-col gap-5 md:ml-80 md:mr-80"
-              style={{
-                backdropFilter: "blur(16px)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                boxShadow: "0 8px 40px rgba(0,0,0,0.4)",
-              }}
-            >
+            <div className="col-span-5 rounded-2xl p-6 flex flex-col gap-5 md:ml-80 md:mr-80" style={{ backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 8px 40px rgba(0,0,0,0.4)" }}>
               <h3 className="text-white font-extrabold text-lg uppercase tracking-widest flex items-center gap-2">
-                <MdOutlineBalance className="text-purple-400 text-xl" />
-                AI Judge Preview
+                <MdOutlineBalance className="text-purple-400 text-xl" />AI Judge Preview
               </h3>
-
               <div className="flex gap-4 items-start">
-                <div
-                  className="rounded-xl overflow-hidden flex-shrink-0"
-                  style={{ width: 200, height: 160, boxShadow: "0 0 24px rgba(124,58,237,0.4)", border: "1px solid rgba(124,58,237,0.3)" }}
-                >
-                  <img
-                    src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=200&h=220&fit=crop&crop=face"
-                    alt="AI Judge"
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100x110/1e1b4b/a78bfa?text=AI"; }}
-                  />
+                <div className="rounded-xl overflow-hidden flex-shrink-0" style={{ width: 200, height: 160, boxShadow: "0 0 24px rgba(124,58,237,0.4)", border: "1px solid rgba(124,58,237,0.3)" }}>
+                  <img src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=200&h=220&fit=crop&crop=face" alt="AI Judge" className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100x110/1e1b4b/a78bfa?text=AI"; }} />
                 </div>
-
                 <div className="flex-1 flex flex-col gap-2">
                   {stats.map((s) => (
                     <div key={s.label} className="flex items-center gap-3">
                       <span className="text-gray-400 text-xs w-28">{s.label}</span>
                       <div className="flex-1 h-3 rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${barColor(s.label)} ${statsLoading ? "animate-pulse" : ""}`}
-                          style={{ width: `${s.value}%`, transition: "width 0.7s ease" }}
-                        />
+                        <div className={`h-full rounded-full ${barColor(s.label)} ${statsLoading ? "animate-pulse" : ""}`} style={{ width: `${s.value}%`, transition: "width 0.7s ease" }} />
                       </div>
                       <span className="text-white text-xs font-bold w-12 text-right">{s.value}/100</span>
                     </div>
                   ))}
-
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-gray-400 text-xs w-28">Bias Detection</span>
                     <span className="text-green-400 text-xs font-bold">{biasLevel}</span>
@@ -486,23 +359,12 @@ const Homepage = () => {
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3 mt-auto">
-                <button
-                  onClick={handleTryAIJudge}
-                  className="py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:brightness-110 transition-all"
-                  style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)", boxShadow: "0 4px 16px rgba(124,58,237,0.3)" }}
-                >
-                  <FaTrophy className="text-yellow-300" />
-                  Try AI Judge
+                <button onClick={handleTryAIJudge} className="py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:brightness-110 transition-all" style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)", boxShadow: "0 4px 16px rgba(124,58,237,0.3)" }}>
+                  <FaTrophy className="text-yellow-300" />Try AI Judge
                 </button>
-                <button
-                  onClick={handleSampleAnalysis}
-                  className="py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
-                  style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#e2e8f0" }}
-                >
-                  <FaEye className="text-teal-400" />
-                  Sample Analysis
+                <button onClick={handleSampleAnalysis} className="py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all" style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#e2e8f0" }}>
+                  <FaEye className="text-teal-400" />Sample Analysis
                 </button>
               </div>
             </div>

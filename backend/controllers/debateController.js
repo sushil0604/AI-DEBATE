@@ -40,7 +40,7 @@ async function getOrCreateAIDebater(slug, displayName) {
 // @route   POST /api/debates
 // @access  Private
 const createDebate = asyncHandler(async (req, res) => {
-  const { mode, topic, description, category, side, maxParticipants, duration } = req.body;
+const { mode, topic, description, category, side, maxParticipants, duration } = req.body;
 
   if (!topic) {
     res.status(400);

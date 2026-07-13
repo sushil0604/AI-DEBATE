@@ -352,6 +352,7 @@ const LiveDebates = () => {
         setJoining(debateId);
         const res = await debateApi.join(debateId);
         const id = res?.debate?._id || res?.data?.debateId || debateId;
+        // Go straight into the debate room
         navigate(`/debate/${id}`);
       } catch (err) {
         setError(err.message || "Couldn't join the debate.");
@@ -374,14 +375,9 @@ const LiveDebates = () => {
         throw new Error("Debate was created but no ID was returned.");
       }
       setShowModal(false);
-      // For human_vs_human, refresh list so room appears as joinable
-      if (mode === "human_vs_human") {
-        await fetchDebates();
-      } else {
-        // For human_vs_ai, go straight into the room
-        const id = res?.debate?._id || res?.data?.debateId;
-        navigate(`/debate/${id}`);
-      }
+      // Always go straight into the room so creator is in the socket room
+      const id = res?.debate?._id || res?.data?.debateId;
+      navigate(`/debate/${id}`);
     } catch (err) {
       setError(err.message || "Couldn't start a debate.");
     } finally {

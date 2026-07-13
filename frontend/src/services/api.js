@@ -44,13 +44,6 @@ export const authApi = {
 export const topicsApi = {
   list: () => api.get("/debates/topics"),
 
-};export const debateApi = {
-  create: (mode, topic, side) => api.post("/debates", { mode, topic, side }),
-  list: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
-    return api.get(`/debates${qs ? `?${qs}` : ""}`);
-  },
-  join: (debateId) => api.post(`/debates/${debateId}/join`),
 };
 export const aiCoachApi = {
   judgeStats: () => api.get("/ai-coach/judge-stats"),
@@ -63,4 +56,13 @@ export const debateRoomApi = {
 export const tournamentApi = {
   list: (status) => api.get(`/tournaments?status=${encodeURIComponent(status)}`),
   register: (tournamentId) => api.post(`/tournaments/${tournamentId}/register`),
+};
+export const debateApi = {
+  create: (mode, topic, side, options = {}) =>
+    api.post("/debates", { mode, topic, side, ...options }),
+  list: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return api.get(`/debates${qs ? `?${qs}` : ""}`);
+  },
+  join: (debateId) => api.post(`/debates/${debateId}/join`),
 };
