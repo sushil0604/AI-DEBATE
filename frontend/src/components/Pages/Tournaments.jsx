@@ -132,7 +132,18 @@ const Tournaments = () => {
   const [actionId,      setActionId]      = useState(null);
   const [modalFor,      setModalFor]      = useState(null);
   const [submitting,    setSubmitting]    = useState(false);
-  const [registeredIds, setRegisteredIds] = useState(new Set());
+  // Load registered IDs from localStorage on mount
+  const [registeredIds, setRegisteredIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tournament_registrations");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  // Persist to localStorage whenever registeredIds changes
+  useEffect(() => {
+    localStorage.setItem("tournament_registrations", JSON.stringify([...registeredIds]));
+  }, [registeredIds]);
 
   const fetchTournaments = async (tab) => {
     setLoading(true);
