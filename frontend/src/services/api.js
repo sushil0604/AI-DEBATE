@@ -62,7 +62,6 @@ export const debateApi = {
   },
   join: (debateId) => api.post(`/debates/${debateId}/join`),
 };
-
 export const tournamentApi = {
   list: (status) => api.get(`/tournaments?status=${encodeURIComponent(status)}`),
   join: (tournamentId) => api.post(`/tournaments/${tournamentId}/join`),
