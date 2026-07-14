@@ -2,17 +2,18 @@ const asyncHandler = require("express-async-handler");
 const Tournament = require("../models/Tournament");
 const Debate = require("../models/Debate");
 
-// Maps frontend tab values to actual schema status values
 const STATUS_MAP = {
   upcoming: ["registration_open", "upcoming"],
   in_progress: ["in_progress"],
   past: ["completed"],
 };
 
-// Reshapes a tournament document into what the frontend expects
-const shapeTournament = (t) => {
+const shapeTournament = (t, userId) => {
   const isPast = ["completed", "cancelled"].includes(t.status);
   const isInProgress = t.status === "in_progress";
+  const isRegistered = userId
+    ? t.participants.some((p) => p._id?.toString() === userId.toString() || p.toString() === userId.toString())
+    : false;
 
   return {
     id: t._id,
@@ -25,6 +26,7 @@ const shapeTournament = (t) => {
     date: t.startDate ? new Date(t.startDate).toLocaleDateString() : "",
     hot: t.participants.length >= Math.ceil(t.maxParticipants * 0.75) && !isPast,
     status: isPast ? "past" : isInProgress ? "in_progress" : "upcoming",
+    isRegistered,
   };
 };
 
@@ -68,10 +70,13 @@ const getTournaments = asyncHandler(async (req, res) => {
     .populate("participants", "name avatar rating")
     .sort({ startDate: 1 });
 
+  // Pass userId if token present (optional auth)
+  const userId = req.user?._id || null;
+
   res.json({
     success: true,
     count: tournaments.length,
-    tournaments: tournaments.map(shapeTournament),
+    tournaments: tournaments.map((t) => shapeTournament(t, userId)),
   });
 });
 
@@ -96,7 +101,7 @@ const getTournamentById = asyncHandler(async (req, res) => {
   res.json({ success: true, tournament });
 });
 
-// @desc    Join a tournament
+// @desc    Join / register for a tournament
 // @route   POST /api/tournaments/:id/join
 // @access  Private
 const joinTournament = asyncHandler(async (req, res) => {
@@ -125,10 +130,43 @@ const joinTournament = asyncHandler(async (req, res) => {
   }
 
   await tournament.save();
-  res.json({ success: true, tournament });
+  res.json({ success: true, tournament: shapeTournament(tournament, req.user._id) });
 });
 
-// @desc    Generate first-round bracket debates (simple random pairing)
+// @desc    Leave / unregister from a tournament
+// @route   DELETE /api/tournaments/:id/leave
+// @access  Private
+const leaveTournament = asyncHandler(async (req, res) => {
+  const tournament = await Tournament.findById(req.params.id);
+  if (!tournament) {
+    res.status(404);
+    throw new Error("Tournament not found");
+  }
+  if (!["registration_open", "upcoming"].includes(tournament.status)) {
+    res.status(400);
+    throw new Error("You can only unregister before the tournament starts");
+  }
+
+  const before = tournament.participants.length;
+  tournament.participants = tournament.participants.filter(
+    (p) => p.toString() !== req.user._id.toString()
+  );
+
+  if (tournament.participants.length === before) {
+    res.status(400);
+    throw new Error("You are not registered in this tournament");
+  }
+
+  // Re-open registration if it was closed due to being full
+  if (tournament.status === "upcoming") {
+    tournament.status = "registration_open";
+  }
+
+  await tournament.save();
+  res.json({ success: true, message: "Successfully unregistered from tournament" });
+});
+
+// @desc    Generate first-round bracket debates
 // @route   POST /api/tournaments/:id/start
 // @access  Private (creator or admin)
 const startTournament = asyncHandler(async (req, res) => {
@@ -151,7 +189,6 @@ const startTournament = asyncHandler(async (req, res) => {
     throw new Error("Need at least 2 participants to start");
   }
 
-  // Shuffle participants
   const shuffled = [...tournament.participants].sort(() => Math.random() - 0.5);
 
   const debateIds = [];
@@ -182,5 +219,6 @@ module.exports = {
   getTournaments,
   getTournamentById,
   joinTournament,
+  leaveTournament,
   startTournament,
 };
