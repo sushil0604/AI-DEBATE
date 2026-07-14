@@ -63,7 +63,9 @@ export const debateApi = {
   join: (debateId) => api.post(`/debates/${debateId}/join`),
 };
 export const tournamentApi = {
-  list: (status) => api.get(`/tournaments?status=${encodeURIComponent(status)}`),
-  join: (tournamentId) => api.post(`/tournaments/${tournamentId}/join`),
-  leave: (tournamentId) => request(`/tournaments/${tournamentId}/leave`, { method: "DELETE" }),
+  list:    (status) => api.get(`/tournaments?status=${encodeURIComponent(status)}`),
+  getById: (id) => api.get(`/tournaments/${id}`),
+  join:    (id) => api.post(`/tournaments/${id}/join`),
+  leave:   (id) => request(`/tournaments/${id}/leave`, { method: "DELETE" }),
+  start:   (id) => api.post(`/tournaments/${id}/start`),  // ← add this
 };

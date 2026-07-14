@@ -1,22 +1,42 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { FaTrophy, FaUsers, FaArrowLeft, FaCalendarAlt } from "react-icons/fa";
+import { FaTrophy, FaUsers, FaArrowLeft, FaCalendarAlt, FaBolt } from "react-icons/fa";
 import PageShell from "./PageShell";
 import { tournamentApi } from "../../services/api";
+import { useAuth } from "../../hooks/useAuth";
 
 const TournamentBracket = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tournament, setTournament] = useState(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState("");
+  const [starting, setStarting]     = useState(false);
 
-  useEffect(() => {
+  const fetchTournament = () => {
+    setLoading(true);
     tournamentApi.getById(id)
       .then((res) => setTournament(res.tournament || res.data))
       .catch((err) => setError(err.message || "Couldn't load tournament."))
       .finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { fetchTournament(); }, [id]);
+
+  const handleStart = async () => {
+    if (!window.confirm("Start the tournament and generate matches now?")) return;
+    try {
+      setStarting(true);
+      setError("");
+      await tournamentApi.start(id);
+      await fetchTournament();
+    } catch (err) {
+      setError(err.message || "Couldn't start tournament.");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   if (loading) return (
     <PageShell eyebrow="COMPETE" title="Tournament Bracket" subtitle="">
@@ -74,7 +94,28 @@ const TournamentBracket = () => {
         <div className="text-center py-16 rounded-2xl" style={{ background: "rgba(8,12,30,0.78)", border: "1px solid rgba(255,255,255,0.07)" }}>
           <FaTrophy className="text-4xl mx-auto mb-3 opacity-20 text-gray-400" />
           <p className="text-white font-bold text-lg mb-1">Bracket not generated yet</p>
-          <p className="text-gray-500 text-sm">The tournament organizer hasn't started the matches yet.</p>
+          <p className="text-gray-500 text-sm mb-6">The tournament organizer hasn't started the matches yet.</p>
+
+          {/* Show start button only to the creator */}
+          {user && tournament?.createdBy &&
+            (tournament.createdBy._id === user.id ||
+             tournament.createdBy._id === user._id ||
+             tournament.createdBy === user.id) && (
+            <div className="flex flex-col items-center gap-3">
+              {participants.length < 2 && (
+                <p className="text-yellow-400 text-xs">Need at least 2 players to start.</p>
+              )}
+              <button
+                onClick={handleStart}
+                disabled={starting || participants.length < 2}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm hover:brightness-110 transition-all disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
+              >
+                <FaBolt />
+                {starting ? "Generating matches…" : `Start Tournament (${participants.length} players)`}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
