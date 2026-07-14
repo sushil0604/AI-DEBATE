@@ -21,10 +21,10 @@ const Leaderboard = () => {
     setLoading(true);
     setError("");
     leaderboardApi
-      .get(activePeriod)
-      .then((res) => setDebaters(res.data.debaters || []))
-      .catch((err) => setError(err.message || "Couldn't load the leaderboard."))
-      .finally(() => setLoading(false));
+  .get(activePeriod)
+.then((res) => setDebaters(res.leaderboard || res.data?.leaderboard || []))
+  .catch((err) => setError(err.message || "Couldn't load the leaderboard."))
+  .finally(() => setLoading(false));
   }, [activePeriod]);
 
   const top3 = debaters.slice(0, 3);
