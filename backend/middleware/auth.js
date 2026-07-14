@@ -57,4 +57,7 @@ const optionalAuth = async (req, res, next) => {
   } catch (_) {}
   next();
 };
+
+// update exports:
 module.exports = { protect, optionalAuth };
+
