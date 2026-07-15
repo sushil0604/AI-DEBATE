@@ -334,38 +334,72 @@ const Homepage = () => {
               </div>
             </div>
 
-            <div className="col-span-5 rounded-2xl p-6 flex flex-col gap-5 md:ml-80 md:mr-80" style={{ backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 8px 40px rgba(0,0,0,0.4)" }}>
-              <h3 className="text-white font-extrabold text-lg uppercase tracking-widest flex items-center gap-2">
-                <MdOutlineBalance className="text-purple-400 text-xl" />AI Judge Preview
-              </h3>
-              <div className="flex gap-4 items-start">
-                <div className="rounded-xl overflow-hidden flex-shrink-0" style={{ width: 200, height: 160, boxShadow: "0 0 24px rgba(124,58,237,0.4)", border: "1px solid rgba(124,58,237,0.3)" }}>
-                  <img src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=200&h=220&fit=crop&crop=face" alt="AI Judge" className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100x110/1e1b4b/a78bfa?text=AI"; }} />
-                </div>
-                <div className="flex-1 flex flex-col gap-2">
-                  {stats.map((s) => (
-                    <div key={s.label} className="flex items-center gap-3">
-                      <span className="text-gray-400 text-xs w-28">{s.label}</span>
-                      <div className="flex-1 h-3 rounded-full bg-white/10 overflow-hidden">
-                        <div className={`h-full rounded-full ${barColor(s.label)} ${statsLoading ? "animate-pulse" : ""}`} style={{ width: `${s.value}%`, transition: "width 0.7s ease" }} />
-                      </div>
-                      <span className="text-white text-xs font-bold w-12 text-right">{s.value}/100</span>
+            <div className="col-span-5 flex justify-center px-4">
+              <div
+                className="w-full max-w-md rounded-2xl p-5 flex flex-col gap-4"
+                style={{
+                  background: "rgba(10,14,30,0.7)",
+                  backdropFilter: "blur(16px)",
+                  border: "1px solid rgba(124,58,237,0.2)",
+                  boxShadow: "0 8px 32px rgba(124,58,237,0.12)",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
+                    style={{ boxShadow: "0 0 18px rgba(124,58,237,0.4)", border: "1px solid rgba(124,58,237,0.35)" }}
+                  >
+                    <img
+                      src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=100&h=100&fit=crop&crop=face"
+                      alt="AI Judge"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100x100/1e1b4b/a78bfa?text=AI"; }}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-extrabold text-sm uppercase tracking-widest flex items-center gap-1.5">
+                      <MdOutlineBalance className="text-purple-400" />
+                      AI Judge Preview
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-gray-500 text-[11px]">Bias:</span>
+                      <span className="text-green-400 text-[11px] font-bold">{biasLevel}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: "0 0 4px rgba(74,222,128,0.8)" }} />
                     </div>
-                  ))}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-gray-400 text-xs w-28">Bias Detection</span>
-                    <span className="text-green-400 text-xs font-bold">{biasLevel}</span>
-                    <span className="ml-1 w-2.5 h-2.5 rounded-full bg-green-400" style={{ boxShadow: "0 0 6px rgba(74,222,128,0.8)" }} />
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mt-auto">
-                <button onClick={handleTryAIJudge} className="py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:brightness-110 transition-all" style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)", boxShadow: "0 4px 16px rgba(124,58,237,0.3)" }}>
-                  <FaTrophy className="text-yellow-300" />Try AI Judge
-                </button>
-                <button onClick={handleSampleAnalysis} className="py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all" style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#e2e8f0" }}>
-                  <FaEye className="text-teal-400" />Sample Analysis
-                </button>
+
+                <div className="flex flex-col gap-1.5">
+                  {stats.map((s) => (
+                    <div key={s.label} className="flex items-center gap-2.5">
+                      <span className="text-gray-400 text-[11px] w-24 flex-shrink-0">{s.label}</span>
+                      <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${barColor(s.label)} ${statsLoading ? "animate-pulse" : ""}`}
+                          style={{ width: `${s.value}%`, transition: "width 0.7s ease" }}
+                        />
+                      </div>
+                      <span className="text-white text-[11px] font-bold w-9 text-right flex-shrink-0">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleTryAIJudge}
+                    className="py-2 rounded-lg text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:brightness-110 transition-all"
+                    style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)", boxShadow: "0 4px 12px rgba(124,58,237,0.3)" }}
+                  >
+                    <FaTrophy className="text-yellow-300 text-[11px]" />Try AI Judge
+                  </button>
+                  <button
+                    onClick={handleSampleAnalysis}
+                    className="py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all"
+                    style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#e2e8f0" }}
+                  >
+                    <FaEye className="text-teal-400 text-[11px]" />Sample Analysis
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaTrophy, FaUsers, FaCalendarAlt, FaCoins, FaFire,
-  FaTimes, FaUser, FaTag, FaCheckCircle,
+  FaTimes, FaUser, FaTag, FaCheckCircle, FaPlus,
 } from "react-icons/fa";
 import PageShell from "./PageShell";
 import { tournamentApi } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
+import CreateTournamentModal from "./CreateTournamentModal";
 
 const tabs = [
   { label: "Upcoming",    value: "upcoming" },
@@ -132,6 +133,8 @@ const Tournaments = () => {
   const [actionId,      setActionId]      = useState(null);
   const [modalFor,      setModalFor]      = useState(null);
   const [submitting,    setSubmitting]    = useState(false);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [creating,      setCreating]      = useState(false);
   // Load registered IDs from localStorage on mount
   const [registeredIds, setRegisteredIds] = useState(() => {
     try {
@@ -201,6 +204,21 @@ const Tournaments = () => {
     });
   };
 
+  const handleCreate = async (formData) => {
+    try {
+      setCreating(true);
+      setError("");
+      await tournamentApi.create(formData);
+      setShowCreate(false);
+      setActiveTab("upcoming");
+      await fetchTournaments("upcoming");
+    } catch (err) {
+      setError(err.message || "Couldn't create tournament.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <PageShell eyebrow="COMPETE" title="Tournaments" subtitle="Climb the bracket, win the crowd, take the prize">
 
@@ -208,16 +226,38 @@ const Tournaments = () => {
         <RegisterModal tournament={modalFor} onClose={() => setModalFor(null)} onConfirm={handleConfirmRegister} submitting={submitting} />
       )}
 
-      <div className="flex items-center gap-2 mb-8">
-        {tabs.map((t) => (
-          <button key={t.value} onClick={() => setActiveTab(t.value)}
-            className="px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200"
-            style={activeTab === t.value
-              ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", color: "#fff", boxShadow: "0 0 14px rgba(124,58,237,0.35)" }
-              : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#9ca3af" }}>
-            {t.label}
+      {showCreate && (
+        <CreateTournamentModal
+          onClose={() => setShowCreate(false)}
+          onSubmit={handleCreate}
+          loading={creating}
+        />
+      )}
+
+      {/* Tabs + Create button */}
+      <div className="flex items-center justify-between gap-2 mb-8">
+        <div className="flex items-center gap-2">
+          {tabs.map((t) => (
+            <button key={t.value} onClick={() => setActiveTab(t.value)}
+              className="px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200"
+              style={activeTab === t.value
+                ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", color: "#fff", boxShadow: "0 0 14px rgba(124,58,237,0.35)" }
+                : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#9ca3af" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Create tournament button — only for logged in users */}
+        {isAuthenticated && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all hover:brightness-110"
+            style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", color: "#fff", boxShadow: "0 0 14px rgba(124,58,237,0.35)" }}
+          >
+            <FaPlus className="text-[10px]" /> Create Tournament
           </button>
-        ))}
+        )}
       </div>
 
       {error && <div className="mb-6 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>}

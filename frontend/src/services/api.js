@@ -67,5 +67,6 @@ export const tournamentApi = {
   getById: (id) => api.get(`/tournaments/${id}`),
   join:    (id) => api.post(`/tournaments/${id}/join`),
   leave:   (id) => request(`/tournaments/${id}/leave`, { method: "DELETE" }),
-  start:   (id) => api.post(`/tournaments/${id}/start`),  // ← add this
+  start:   (id) => api.post(`/tournaments/${id}/start`),
+  create:  (data) => api.post(`/tournaments`, data),  // ← add this
 };
