@@ -5,12 +5,58 @@ import { FaPaperPlane, FaTrophy, FaEye, FaClock, FaMicrophone, FaMicrophoneSlash
 import { debateRoomApi } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
 import AIBackground from "../Home/AIBackground";
+import { FaVideo, FaVideoSlash, FaMicrophone as FaMic, FaMicrophoneSlash as FaMicOff } from "react-icons/fa";
+import { useWebRTC } from "../../hooks/useWebRTC";
 
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/api$/, "")
   : "http://localhost:5000";
 
-const TURN_SECONDS = 30;
+const TURN_SECONDS = 60;
+
+const VideoPanel = ({ localStream, remoteStream, connectionState, micOn, camOn, toggleMic, toggleCam }) => {
+  const localRef = useRef(null);
+  const remoteRef = useRef(null);
+
+  useEffect(() => {
+    if (localRef.current && localStream) localRef.current.srcObject = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteRef.current && remoteStream) remoteRef.current.srcObject = remoteStream;
+  }, [remoteStream]);
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3">
+      {[
+        { ref: remoteRef, label: "Opponent", muted: false, active: !!remoteStream },
+        { ref: localRef, label: "You", muted: true, active: !!localStream },
+      ].map((v) => (
+        <div key={v.label} className="relative rounded-xl overflow-hidden aspect-video" style={{ background: "rgba(8,12,30,0.9)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          {v.active ? (
+            <video ref={v.ref} autoPlay playsInline muted={v.muted} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">
+              {v.label === "Opponent" ? "Waiting to connect…" : "Camera off"}
+            </div>
+          )}
+          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 text-white">
+            {v.label}
+          </span>
+        </div>
+      ))}
+      <div className="col-span-2 flex items-center justify-center gap-3">
+        <button onClick={toggleMic} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
+          {micOn ? <FaMic className="text-white text-xs" /> : <FaMicOff className="text-red-400 text-xs" />}
+        </button>
+        <button onClick={toggleCam} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: camOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
+          {camOn ? <FaVideo className="text-white text-xs" /> : <FaVideoSlash className="text-red-400 text-xs" />}
+        </button>
+        <span className="text-[10px] text-gray-500 uppercase tracking-wide">{connectionState}</span>
+      </div>
+    </div>
+  );
+};
 
 /* ─── Voice input hook ─── */
 const useVoiceInput = (onTranscript) => {
@@ -219,6 +265,14 @@ const DebateRoom = () => {
   const { debateId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const isHumanVsHuman = debate?.mode === "human_vs_human";
+  const videoEnabled = isHumanVsHuman && debate?.status === "live" && !ended;
+  const shouldInitiate = mySide === "for"; // one deterministic side always offers, avoids both racing
+
+  const webrtc = useWebRTC(socketRef.current, debateId, {
+    enabled: videoEnabled,
+    shouldInitiate,
+  });
 
   const [debate, setDebate]           = useState(null);
   const [rounds, setRounds]           = useState([]);
@@ -525,6 +579,9 @@ const DebateRoom = () => {
             </div>
             <div>
               <h3 className="text-white font-bold text-lg mb-1">Waiting for opponent…</h3>
+              {videoEnabled && (
+          <VideoPanel {...webrtc} />
+        )}
               <p className="text-gray-400 text-sm">Share this room link or wait for someone to join from Live Debates.</p>
             </div>
             <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-400"

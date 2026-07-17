@@ -30,7 +30,7 @@ const Navbar = () => {
             className="text-white font-bold text-lg tracking-tight"
             style={{ fontFamily: "'Exo 2', sans-serif" }}
           >
-            Debate<span className="text-violet-400">AI</span>
+            Debate<span className="text-violet-400">IQ</span>
           </span>
           <p className="text-[9px] text-violet-300/70 -mt-1 tracking-widest uppercase">
             Challenge Ideas. Change Minds.

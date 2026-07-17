@@ -320,6 +320,28 @@ function registerDebateSocket(io) {
         isTyping: !!isTyping,
       });
     });
+    // WebRTC signaling — server just relays these between the two peers in the
+    // room; it never touches the actual audio/video stream.
+    socket.on("webrtc_offer", ({ debateId, offer }) => {
+      socket.to(`debate:${debateId}`).emit("webrtc_offer", {
+        offer,
+        fromUserId: socket.user._id,
+      });
+    });
+
+    socket.on("webrtc_answer", ({ debateId, answer }) => {
+      socket.to(`debate:${debateId}`).emit("webrtc_answer", {
+        answer,
+        fromUserId: socket.user._id,
+      });
+    });
+
+    socket.on("webrtc_ice_candidate", ({ debateId, candidate }) => {
+      socket.to(`debate:${debateId}`).emit("webrtc_ice_candidate", {
+        candidate,
+        fromUserId: socket.user._id,
+      });
+    });
 
     socket.on("send_argument", async ({ debateId, text }) => {
       try {
