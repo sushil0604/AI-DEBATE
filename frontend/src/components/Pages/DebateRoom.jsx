@@ -264,7 +264,7 @@ const ResultsScreen = ({ ended, deleteCountdown, onLeave }) => {
 const DebateRoom = () => {
   const { debateId } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, authLoading } = useAuth();
+ const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   const [debate, setDebate]           = useState(null);
   const [rounds, setRounds]           = useState([]);
