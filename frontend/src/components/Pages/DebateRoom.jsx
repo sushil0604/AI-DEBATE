@@ -264,15 +264,7 @@ const ResultsScreen = ({ ended, deleteCountdown, onLeave }) => {
 const DebateRoom = () => {
   const { debateId } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const isHumanVsHuman = debate?.mode === "human_vs_human";
-  const videoEnabled = isHumanVsHuman && debate?.status === "live" && !ended;
-  const shouldInitiate = mySide === "for"; // one deterministic side always offers, avoids both racing
-
-  const webrtc = useWebRTC(socketRef.current, debateId, {
-    enabled: videoEnabled,
-    shouldInitiate,
-  });
+  const { user, isAuthenticated, authLoading } = useAuth();
 
   const [debate, setDebate]           = useState(null);
   const [rounds, setRounds]           = useState([]);
@@ -293,9 +285,9 @@ const DebateRoom = () => {
   const [currentTurnSide, setCurrentTurnSide] = useState("for"); // who can speak now
   const turnIntervalRef = useRef(null);
 
-  const socketRef        = useRef(null);
-  const scrollRef        = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const socketRef         = useRef(null);
+  const scrollRef         = useRef(null);
+  const typingTimeoutRef  = useRef(null);
   const deleteIntervalRef = useRef(null);
 
   const isSpectatorOnly = debate?.mode === "ai_vs_ai";
@@ -305,6 +297,16 @@ const DebateRoom = () => {
     (p) => p.user?._id === user?.id || p.user?._id === user?._id || p.user === user?.id
   )?.side;
   const isMyTurn = !isSpectatorOnly && mySide === currentTurnSide && !timerExpired && debate?.status === "live";
+
+  // Video is only relevant once both sides are live in a real (non-AI) debate.
+  const videoEnabled = !isSpectatorOnly && debate?.status === "live";
+  // Exactly one participant should send the initial WebRTC offer — "for" side does it.
+  const shouldInitiate = mySide === "for";
+
+  const webrtc = useWebRTC(socketRef.current, debateId, {
+    enabled: videoEnabled,
+    shouldInitiate,
+  });
 
   // Derive whose turn it is from rounds
   const deriveTurnSide = useCallback((roundsList) => {
@@ -569,6 +571,11 @@ const DebateRoom = () => {
           <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
         )}
 
+        {/* Video panel — only while a live human-vs-human debate is in progress */}
+        {videoEnabled && !ended && (
+          <VideoPanel {...webrtc} />
+        )}
+
         {/* Waiting for opponent */}
         {debate?.status === "waiting" && rounds.length === 0 && !ended && (
           <div className="mb-6 rounded-2xl p-6 flex flex-col items-center gap-4 text-center"
@@ -579,9 +586,6 @@ const DebateRoom = () => {
             </div>
             <div>
               <h3 className="text-white font-bold text-lg mb-1">Waiting for opponent…</h3>
-              {videoEnabled && (
-          <VideoPanel {...webrtc} />
-        )}
               <p className="text-gray-400 text-sm">Share this room link or wait for someone to join from Live Debates.</p>
             </div>
             <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-400"
