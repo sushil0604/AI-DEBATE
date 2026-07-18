@@ -6,7 +6,7 @@ import {
 } from "react-icons/fa";
 import PageShell from "./PageShell";
 import { tournamentApi } from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../context/AuthContext"; 
 import CreateTournamentModal from "./CreateTournamentModal";
 
 const tabs = [

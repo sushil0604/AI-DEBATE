@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaRobot, FaUsers, FaGlobeAmericas, FaBalanceScale, FaLightbulb } from "react-icons/fa";
 import PageShell from "../Pages/PageShell";
 import { statsApi } from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../context/AuthContext"; // adjust relative path per file
 
 const DEFAULT_STATS = [
   { value: "48,000+", label: "Debates Hosted", key: "debatesHosted" },

@@ -1,6 +1,6 @@
 import React from 'react'
 import Navbar from './components/Navbar/Navbar'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import Homepage from './components/Home/Homepage'
 import LiveDebates from './components/Pages/LiveDebates'
 import Topics from './components/Pages/Topics'
@@ -16,7 +16,7 @@ import DebateRoom from './components/Pages/DebateRoom'
 
 const App = () => {
   return (
-    <BrowserRouter>
+    <>
       <Navbar />
       <Routes>
         <Route path="/" element={<Homepage />} />
@@ -35,7 +35,7 @@ const App = () => {
         <Route path="/debate/:debateId" element={<DebateRoom />} />
         <Route path="/map" element={<Topics />} />
       </Routes>
-    </BrowserRouter>
+    </>
   )
 }
 

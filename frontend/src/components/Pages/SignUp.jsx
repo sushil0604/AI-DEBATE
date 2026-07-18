@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FaUser, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaRobot, FaGoogle, FaGithub, FaCheck } from "react-icons/fa";
 import AIBackground from "../Home/AIBackground";
 import { authApi } from "../../services/api";
+import { useAuth } from "../../context/AuthContext"; // adjust path if your AuthContext lives elsewhere
 
 const passwordChecks = [
   { label: "At least 8 characters", test: (pw) => pw.length >= 8 },
@@ -13,6 +14,7 @@ const passwordChecks = [
 const SignUp = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -39,7 +41,9 @@ const SignUp = () => {
     try {
       setSubmitting(true);
       const res = await authApi.register(form.name, form.email, form.password);
-      localStorage.setItem("token", res.token);
+      // Updates the shared AuthContext immediately — not just localStorage —
+      // so every component reading isAuthenticated sees the change right away.
+      login(res.token, res.user);
 
       const redirectTo = location.state?.from || "/";
       navigate(redirectTo, { replace: true, state: location.state?.intent ? { intent: location.state.intent } : undefined });

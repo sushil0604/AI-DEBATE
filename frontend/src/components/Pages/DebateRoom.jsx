@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { FaPaperPlane, FaTrophy, FaEye, FaClock, FaMicrophone, FaMicrophoneSlash } from "react-icons/fa";
 import { debateRoomApi } from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../context/AuthContext";
 import AIBackground from "../Home/AIBackground";
 import { FaVideo, FaVideoSlash, FaMicrophone as FaMic, FaMicrophoneSlash as FaMicOff } from "react-icons/fa";
 import { useWebRTC } from "../../hooks/useWebRTC";
@@ -351,7 +351,10 @@ const DebateRoom = () => {
   const [ended, setEnded]             = useState(null);
   const [sending, setSending]         = useState(false);
   const [othersTyping, setOthersTyping] = useState(false);
-  const [activeTab, setActiveTab] = useState("text"); // "text" | "video" — two separate "rooms"
+  // Room mode is chosen ONCE at the start of a live debate and then locked —
+  // unlike a toggleable tab, there's no switching back after picking.
+  // null = not chosen yet (shows the picker screen), "text" | "video" after.
+  const [roomMode, setRoomMode] = useState(null);
 
   // Overall debate timer
   const [secondsLeft, setSecondsLeft]     = useState(null);
@@ -377,7 +380,12 @@ const DebateRoom = () => {
   const isMyTurn = !isSpectatorOnly && mySide === currentTurnSide && !timerExpired && debate?.status === "live";
 
   // Video is only relevant once both sides are live in a real (non-AI) debate.
-  const videoEnabled = !isSpectatorOnly && debate?.status === "live";
+  const videoRoomAvailable = !isSpectatorOnly && debate?.status === "live";
+  // The hook only turns the camera/mic/peer connection on while the Video
+  // tab is actually selected. Switching to Text triggers useWebRTC's own
+  // cleanup (closes the connection, stops tracks) since `enabled` flips to
+  // false — camera light turns off, connection fully tears down.
+  const videoEnabled = videoRoomAvailable && roomMode === "video";
   // Exactly one participant should send the initial WebRTC offer — "for" side does it.
   const shouldInitiate = mySide === "for";
 
@@ -581,6 +589,14 @@ const DebateRoom = () => {
 
   const { listening, supported: voiceSupported, toggle: toggleVoice } = useVoiceInput(handleTranscript);
 
+  // Text room's voice input shouldn't keep listening once you've switched
+  // over to the Video Call room — stop it so only one room is ever "live".
+  useEffect(() => {
+    if (roomMode !== "text" && listening) {
+      toggleVoice();
+    }
+  }, [roomMode, listening, toggleVoice]);
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text || sending || !socketRef.current || isSpectatorOnly || timerExpired) return;
@@ -649,44 +665,44 @@ const DebateRoom = () => {
           <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
         )}
 
-        {/* Room switcher — Video Call and Text Debate are separate rooms.
-            Only shown once video is actually relevant (live, non-AI debate). */}
-        {videoEnabled && !ended && (
-          <div className="mb-4 flex gap-2 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <button
-              onClick={() => setActiveTab("text")}
-              className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
-              style={{
-                background: activeTab === "text" ? "linear-gradient(135deg,#7c3aed,#4f46e5)" : "transparent",
-                color: activeTab === "text" ? "#fff" : "#9ca3af",
-              }}
-            >
-              💬 Text Debate
-            </button>
-            <button
-              onClick={() => setActiveTab("video")}
-              className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
-              style={{
-                background: activeTab === "video" ? "linear-gradient(135deg,#7c3aed,#4f46e5)" : "transparent",
-                color: activeTab === "video" ? "#fff" : "#9ca3af",
-              }}
-            >
-              📹 Video Call {webrtc.connectionState === "connected" && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-400" />}
-            </button>
+        {/* Mode picker — shown ONCE when a live human debate starts and no
+            choice has been made yet. Once picked, this never shows again
+            for the rest of the debate; there's no switching back. */}
+        {videoRoomAvailable && !ended && roomMode === null && (
+          <div className="mb-6 rounded-2xl p-6 text-center"
+            style={{ background: "rgba(8,12,30,0.7)", border: "1px solid rgba(124,58,237,0.25)" }}>
+            <h3 className="text-white font-bold text-lg mb-1">Choose how you'll debate</h3>
+            <p className="text-gray-400 text-sm mb-5">This can't be changed once picked — choose the mode you'll use for the whole debate.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setRoomMode("text")}
+                className="py-4 rounded-xl text-white font-bold text-sm flex flex-col items-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
+              >
+                <span className="text-xl">💬</span> Text Debate
+              </button>
+              <button
+                onClick={() => setRoomMode("video")}
+                className="py-4 rounded-xl text-white font-bold text-sm flex flex-col items-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)", boxShadow: "0 4px 16px rgba(37,99,235,0.35)" }}
+              >
+                <span className="text-xl">📹</span> Video Call
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Video Call room — kept mounted (hidden via CSS, not unmounted) so
-            the peer connection, mic, and camera keep running even while the
-            Text Debate tab is active. */}
+        {/* Video Call room — only rendered once "video" was chosen at the
+            start. Locked in: no button anywhere lets you go back to text. */}
         {videoEnabled && !ended && (
-          <div style={{ display: activeTab === "video" ? "block" : "none" }}>
-            <VideoPanel {...webrtc} />
-          </div>
+          <VideoPanel {...webrtc} />
         )}
 
-        {/* Text Debate room */}
-        <div style={{ display: !videoEnabled || activeTab === "text" ? "block" : "none" }}>
+
+        {/* Text Debate room — only mounted once "text" was chosen at the
+            start (or video isn't relevant to this debate at all, e.g. AI vs AI). */}
+        {(!videoRoomAvailable || roomMode === "text") && (
+        <div>
 
         {/* Waiting for opponent */}
         {debate?.status === "waiting" && rounds.length === 0 && !ended && (
@@ -811,6 +827,7 @@ const DebateRoom = () => {
           </div>
         )}
         </div>
+        )}
 
         {/* Results — shown regardless of which room tab is active */}
         {ended && (

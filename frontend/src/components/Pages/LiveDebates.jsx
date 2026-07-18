@@ -10,7 +10,7 @@ import {
 import { MdLiveTv } from "react-icons/md";
 import AIBackground from "../Home/AIBackground";
 import { debateApi } from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../context/AuthContext"; // adjust relative path per file
 import CreateDebateModal from "./CreateDebateModal";
 
 /* ─── Filter tabs ─── */

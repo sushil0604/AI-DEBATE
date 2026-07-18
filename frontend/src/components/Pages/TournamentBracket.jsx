@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { FaTrophy, FaUsers, FaArrowLeft, FaCalendarAlt, FaBolt } from "react-icons/fa";
 import PageShell from "./PageShell";
 import { tournamentApi } from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../context/AuthContext"; // adjust relative path per file
 
 const TournamentBracket = () => {
   const { id } = useParams();

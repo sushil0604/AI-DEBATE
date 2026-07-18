@@ -3,10 +3,12 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash, FaRobot, FaGoogle, FaGithub } from "react-icons/fa";
 import AIBackground from "../Home/AIBackground";
 import { authApi } from "../../services/api";
+import { useAuth } from "../../context/AuthContext"; // adjust path if your AuthContext lives elsewhere
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
@@ -24,7 +26,10 @@ const Login = () => {
 
     try {
       const res = await authApi.login(form.email, form.password);
-      localStorage.setItem("token", res.token);
+      // Updates the shared AuthContext immediately — not just localStorage —
+      // so every component reading isAuthenticated sees the change right away,
+      // with no stale-until-remount race.
+      login(res.token, res.user);
 
       // send them back where they came from (e.g. Homepage's "Start Debate" flow), else home
       const redirectTo = location.state?.from || "/";
