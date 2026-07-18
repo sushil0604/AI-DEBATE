@@ -14,45 +14,122 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 
 const TURN_SECONDS = 60;
 
-const VideoPanel = ({ localStream, remoteStream, connectionState, micOn, camOn, toggleMic, toggleCam }) => {
-  const localRef = useRef(null);
-  const remoteRef = useRef(null);
+// Tracks whether a MediaStream currently has a live, enabled video track.
+// Re-checks whenever tracks are added/removed/toggled so the UI stays in
+// sync if a peer turns their camera on or off mid-call.
+const useHasVideo = (stream) => {
+  const [hasVideo, setHasVideo] = useState(false);
 
   useEffect(() => {
-    if (localRef.current && localStream) localRef.current.srcObject = localStream;
-  }, [localStream]);
+    if (!stream) {
+      setHasVideo(false);
+      return;
+    }
 
+    const recompute = () => {
+      const videoTracks = stream.getVideoTracks();
+      setHasVideo(videoTracks.length > 0 && videoTracks.some((t) => t.enabled && t.readyState === "live"));
+    };
+
+    recompute();
+
+    stream.addEventListener("addtrack", recompute);
+    stream.addEventListener("removetrack", recompute);
+    // Track-level mute/unmute/ended also affect whether video is actually visible
+    const videoTracks = stream.getVideoTracks();
+    videoTracks.forEach((t) => {
+      t.addEventListener("mute", recompute);
+      t.addEventListener("unmute", recompute);
+      t.addEventListener("ended", recompute);
+    });
+
+    return () => {
+      stream.removeEventListener("addtrack", recompute);
+      stream.removeEventListener("removetrack", recompute);
+      videoTracks.forEach((t) => {
+        t.removeEventListener("mute", recompute);
+        t.removeEventListener("unmute", recompute);
+        t.removeEventListener("ended", recompute);
+      });
+    };
+  }, [stream]);
+
+  return hasVideo;
+};
+
+const VideoTile = ({ label, stream, muted, waitingLabel, audioOnlyLabel }) => {
+  const ref = useRef(null);
+  const hasVideo = useHasVideo(stream);
+  const hasStream = !!stream;
+
+  // Keep the <video> element attached to the stream at all times — even for
+  // audio-only streams — so audio keeps playing. We just visually hide the
+  // video surface and show an overlay when there's no video track.
   useEffect(() => {
-    if (remoteRef.current && remoteStream) remoteRef.current.srcObject = remoteStream;
-  }, [remoteStream]);
+    if (ref.current && stream) ref.current.srcObject = stream;
+  }, [stream]);
 
   return (
-    <div className="mb-4 grid grid-cols-2 gap-3">
-      {[
-        { ref: remoteRef, label: "Opponent", muted: false, active: !!remoteStream },
-        { ref: localRef, label: "You", muted: true, active: !!localStream },
-      ].map((v) => (
-        <div key={v.label} className="relative rounded-xl overflow-hidden aspect-video" style={{ background: "rgba(8,12,30,0.9)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          {v.active ? (
-            <video ref={v.ref} autoPlay playsInline muted={v.muted} className="w-full h-full object-cover" />
+    <div className="relative rounded-xl overflow-hidden aspect-video" style={{ background: "rgba(8,12,30,0.9)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      {hasStream && (
+        <video
+          ref={ref}
+          autoPlay
+          playsInline
+          muted={muted}
+          className="w-full h-full object-cover"
+          style={{ visibility: hasVideo ? "visible" : "hidden" }}
+        />
+      )}
+      {(!hasStream || !hasVideo) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-gray-500 text-xs">
+          {hasStream ? (
+            <>
+              <FaMic className="text-sm text-gray-400" />
+              <span>{audioOnlyLabel}</span>
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">
-              {v.label === "Opponent" ? "Waiting to connect…" : "Camera off"}
-            </div>
+            <span>{waitingLabel}</span>
           )}
-          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 text-white">
-            {v.label}
-          </span>
         </div>
-      ))}
-      <div className="col-span-2 flex items-center justify-center gap-3">
-        <button onClick={toggleMic} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
-          {micOn ? <FaMic className="text-white text-xs" /> : <FaMicOff className="text-red-400 text-xs" />}
-        </button>
-        <button onClick={toggleCam} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: camOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
-          {camOn ? <FaVideo className="text-white text-xs" /> : <FaVideoSlash className="text-red-400 text-xs" />}
-        </button>
-        <span className="text-[10px] text-gray-500 uppercase tracking-wide">{connectionState}</span>
+      )}
+      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 text-white">
+        {label}
+      </span>
+    </div>
+  );
+};
+
+const VideoPanel = ({ localStream, remoteStream, connectionState, micOn, camOn, toggleMic, toggleCam, mediaError }) => {
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3">
+      <VideoTile
+        label="Opponent"
+        stream={remoteStream}
+        muted={false}
+        waitingLabel="Waiting to connect…"
+        audioOnlyLabel="Audio only"
+      />
+      <VideoTile
+        label="You"
+        stream={localStream}
+        muted={true}
+        waitingLabel="Camera off"
+        audioOnlyLabel="Audio only"
+      />
+      <div className="col-span-2 flex flex-col items-center justify-center gap-1.5">
+        <div className="flex items-center gap-3">
+          <button onClick={toggleMic} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            {micOn ? <FaMic className="text-white text-xs" /> : <FaMicOff className="text-red-400 text-xs" />}
+          </button>
+          <button onClick={toggleCam} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: camOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            {camOn ? <FaVideo className="text-white text-xs" /> : <FaVideoSlash className="text-red-400 text-xs" />}
+          </button>
+          <span className="text-[10px] text-gray-500 uppercase tracking-wide">{connectionState}</span>
+        </div>
+        {mediaError && (
+          <span className="text-[10px] text-orange-400">{mediaError}</span>
+        )}
       </div>
     </div>
   );
@@ -264,7 +341,7 @@ const ResultsScreen = ({ ended, deleteCountdown, onLeave }) => {
 const DebateRoom = () => {
   const { debateId } = useParams();
   const navigate = useNavigate();
- const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, authLoading } = useAuth();
 
   const [debate, setDebate]           = useState(null);
   const [rounds, setRounds]           = useState([]);
@@ -274,6 +351,7 @@ const DebateRoom = () => {
   const [ended, setEnded]             = useState(null);
   const [sending, setSending]         = useState(false);
   const [othersTyping, setOthersTyping] = useState(false);
+  const [activeTab, setActiveTab] = useState("text"); // "text" | "video" — two separate "rooms"
 
   // Overall debate timer
   const [secondsLeft, setSecondsLeft]     = useState(null);
@@ -571,10 +649,44 @@ const DebateRoom = () => {
           <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
         )}
 
-        {/* Video panel — only while a live human-vs-human debate is in progress */}
+        {/* Room switcher — Video Call and Text Debate are separate rooms.
+            Only shown once video is actually relevant (live, non-AI debate). */}
         {videoEnabled && !ended && (
-          <VideoPanel {...webrtc} />
+          <div className="mb-4 flex gap-2 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <button
+              onClick={() => setActiveTab("text")}
+              className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
+              style={{
+                background: activeTab === "text" ? "linear-gradient(135deg,#7c3aed,#4f46e5)" : "transparent",
+                color: activeTab === "text" ? "#fff" : "#9ca3af",
+              }}
+            >
+              💬 Text Debate
+            </button>
+            <button
+              onClick={() => setActiveTab("video")}
+              className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
+              style={{
+                background: activeTab === "video" ? "linear-gradient(135deg,#7c3aed,#4f46e5)" : "transparent",
+                color: activeTab === "video" ? "#fff" : "#9ca3af",
+              }}
+            >
+              📹 Video Call {webrtc.connectionState === "connected" && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-400" />}
+            </button>
+          </div>
         )}
+
+        {/* Video Call room — kept mounted (hidden via CSS, not unmounted) so
+            the peer connection, mic, and camera keep running even while the
+            Text Debate tab is active. */}
+        {videoEnabled && !ended && (
+          <div style={{ display: activeTab === "video" ? "block" : "none" }}>
+            <VideoPanel {...webrtc} />
+          </div>
+        )}
+
+        {/* Text Debate room */}
+        <div style={{ display: !videoEnabled || activeTab === "text" ? "block" : "none" }}>
 
         {/* Waiting for opponent */}
         {debate?.status === "waiting" && rounds.length === 0 && !ended && (
@@ -594,11 +706,6 @@ const DebateRoom = () => {
               <button onClick={() => navigator.clipboard.writeText(window.location.href)} className="text-violet-400 hover:text-violet-300 font-bold flex-shrink-0">Copy</button>
             </div>
           </div>
-        )}
-
-        {/* Results */}
-        {ended && (
-          <ResultsScreen ended={ended} deleteCountdown={deleteCountdown} onLeave={() => navigate("/livedebates")} />
         )}
 
         {/* Rounds */}
@@ -702,6 +809,12 @@ const DebateRoom = () => {
               <FaPaperPlane className="text-sm" />
             </button>
           </div>
+        )}
+        </div>
+
+        {/* Results — shown regardless of which room tab is active */}
+        {ended && (
+          <ResultsScreen ended={ended} deleteCountdown={deleteCountdown} onLeave={() => navigate("/livedebates")} />
         )}
       </div>
     </div>

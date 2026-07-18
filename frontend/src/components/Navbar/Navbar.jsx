@@ -9,7 +9,7 @@ const navLinks = [
   { label: "Leaderboard", path: "/leaderboard" },
   { label: "AI Coach", path: "/ai-coach" },
   { label: "Tournaments", path: "/tournaments" },
-  { label: "Pricing", path: "/pricing" },
+  // { label: "Pricing", path: "/pricing" },
   { label: "About", path: "/about" },
 ];
 

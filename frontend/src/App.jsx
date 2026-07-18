@@ -8,7 +8,7 @@ import Leaderboard from './components/Pages/Leaderboard'
 import AICoach from './components/Pages/AICoach'
 import Tournaments from './components/Pages/Tournaments'
 import TournamentBracket from './components/Pages/TournamentBracket'
-import Pricing from './components/Pages/Pricing'
+// import Pricing from './components/Pages/Pricing'
 import About from './components/Pages/About'
 import Login from './components/Pages/Login'
 import SignUp from './components/Pages/SignUp'
@@ -28,7 +28,7 @@ const App = () => {
         <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/tournaments/:id/bracket" element={<TournamentBracket />} />
         <Route path="/tournaments/:id/results" element={<TournamentBracket />} />
-        <Route path="/pricing" element={<Pricing />} />
+        {/* <Route path="/pricing" element={<Pricing />} /> */}
         <Route path="/about" element={<About />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
