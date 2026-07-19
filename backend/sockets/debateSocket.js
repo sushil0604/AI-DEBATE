@@ -233,20 +233,22 @@ async function runAIvsAIDebate(io, debateId) {
  * Wires up all Socket.io behavior for live debates.
  *
  * Client events (emit from frontend):
- *  - "join_debate"   { debateId }
- *  - "leave_debate"  { debateId }
- *  - "send_argument" { debateId, text }
- *  - "typing"        { debateId, isTyping }
+ *  - "join_debate"    { debateId }
+ *  - "leave_debate"   { debateId }
+ *  - "send_argument"  { debateId, text }
+ *  - "typing"         { debateId, isTyping }
+ *  - "set_room_mode"  { debateId, mode }        ← NEW: "text" | "video", first choice wins
  *
  * Server events (listen on frontend):
- *  - "debate_state"  debate document snapshot
- *  - "timer_tick"    { secondsLeft }             ← NEW: fires every second
- *  - "new_argument"  { round }
- *  - "debate_ended"  { reason, winnerSide, verdict, deleteInSeconds }  ← NEW: results screen
- *  - "room_deleted"  { message }                 ← NEW: 60s after debate_ended
- *  - "user_typing"   { userId, isTyping }
- *  - "user_joined"   { userId, name }
- *  - "error_message" { message }
+ *  - "debate_state"   debate document snapshot (includes roomMode if already chosen)
+ *  - "timer_tick"     { secondsLeft }
+ *  - "new_argument"   { round }
+ *  - "debate_ended"   { reason, winnerSide, verdict, deleteInSeconds }
+ *  - "room_deleted"   { message }
+ *  - "user_typing"    { userId, isTyping }
+ *  - "user_joined"    { userId, name }
+ *  - "room_mode_set"  { mode }                  ← NEW: broadcast to both participants
+ *  - "error_message"  { message }
  */
 function registerDebateSocket(io) {
   io.use(async (socket, next) => {
@@ -320,6 +322,36 @@ function registerDebateSocket(io) {
         isTyping: !!isTyping,
       });
     });
+
+    // Room mode (text vs video) — chosen ONCE per debate, by whichever
+    // participant picks first. Requires a `roomMode` field on the Debate
+    // model: roomMode: { type: String, enum: ["text", "video"], default: null }
+    socket.on("set_room_mode", async ({ debateId, mode }) => {
+      try {
+        if (mode !== "text" && mode !== "video") return;
+
+        const debate = await Debate.findById(debateId);
+        if (!debate) {
+          return socket.emit("error_message", { message: "Debate not found" });
+        }
+
+        // First choice wins and is locked in — later attempts to change it
+        // (from either participant) are ignored, so the two sides can never
+        // end up desynced onto different rooms.
+        if (!debate.roomMode) {
+          debate.roomMode = mode;
+          await debate.save();
+        }
+
+        // Broadcast the authoritative, locked-in mode to EVERYONE in the
+        // room (including the sender) so both clients converge on the same
+        // value even if they clicked different buttons at nearly the same time.
+        io.to(`debate:${debateId}`).emit("room_mode_set", { mode: debate.roomMode });
+      } catch (err) {
+        socket.emit("error_message", { message: err.message });
+      }
+    });
+
     // WebRTC signaling — server just relays these between the two peers in the
     // room; it never touches the actual audio/video stream.
     socket.on("webrtc_offer", ({ debateId, offer }) => {

@@ -17,6 +17,7 @@ const debateSchema = new mongoose.Schema(
   {
     topic: { type: String, required: true },
     description: { type: String, default: "" },
+    roomMode: { type: String, enum: ["text", "video"], default: null },
     category: { type: String, default: "General" },
     mode: {
       type: String,

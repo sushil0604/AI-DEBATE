@@ -102,7 +102,7 @@ const VideoTile = ({ label, stream, muted, waitingLabel, audioOnlyLabel }) => {
 
 const VideoPanel = ({ localStream, remoteStream, connectionState, micOn, camOn, toggleMic, toggleCam, mediaError }) => {
   return (
-    <div className="mb-4 grid grid-cols-2 gap-3">
+    <div className="mb-4 grid grid-cols-2 gap-4">
       <VideoTile
         label="Opponent"
         stream={remoteStream}
@@ -341,7 +341,7 @@ const ResultsScreen = ({ ended, deleteCountdown, onLeave }) => {
 const DebateRoom = () => {
   const { debateId } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   const [debate, setDebate]           = useState(null);
   const [rounds, setRounds]           = useState([]);
@@ -381,10 +381,10 @@ const DebateRoom = () => {
 
   // Video is only relevant once both sides are live in a real (non-AI) debate.
   const videoRoomAvailable = !isSpectatorOnly && debate?.status === "live";
-  // The hook only turns the camera/mic/peer connection on while the Video
-  // tab is actually selected. Switching to Text triggers useWebRTC's own
-  // cleanup (closes the connection, stops tracks) since `enabled` flips to
-  // false — camera light turns off, connection fully tears down.
+  // The hook only turns the camera/mic/peer connection on once "video" was
+  // chosen at the start. There's no switching back, but the hook still gates
+  // on this the same way — camera/mic release if this ever goes false
+  // (e.g. debate ends).
   const videoEnabled = videoRoomAvailable && roomMode === "video";
   // Exactly one participant should send the initial WebRTC offer — "for" side does it.
   const shouldInitiate = mySide === "for";
@@ -458,6 +458,7 @@ const DebateRoom = () => {
         const d = res.debate || res.data || res;
         setDebate(d);
         setRounds(d.rounds || []);
+        if (d.roomMode) setRoomMode(d.roomMode);
         if (d.status === "live" && d.endsAt) {
           const left = Math.max(0, Math.round((new Date(d.endsAt) - Date.now()) / 1000));
           setSecondsLeft(left);
@@ -481,12 +482,20 @@ const DebateRoom = () => {
       setDebate(data.debate);
       setRounds(data.debate.rounds || []);
       setLoading(false);
+      if (data.debate.roomMode) setRoomMode(data.debate.roomMode);
         if (data.debate.status === "live" && data.debate.endsAt) {
         const left = Math.max(0, Math.round((new Date(data.debate.endsAt) - Date.now()) / 1000));
         setSecondsLeft(left);
         if (left === 0) setTimerExpired(true);
         startTurnTimer(deriveTurnSide(data.debate.rounds || []));
       }
+    });
+
+    // Whichever participant picks a mode first, the server locks it in and
+    // broadcasts it here to BOTH clients — this is what keeps the two
+    // debaters from ending up in different rooms (one text, one video).
+    socket.on("room_mode_set", ({ mode }) => {
+      setRoomMode(mode);
     });
 
     socket.on("debate_started", ({ debateId: startedId }) => {
@@ -589,13 +598,43 @@ const DebateRoom = () => {
 
   const { listening, supported: voiceSupported, toggle: toggleVoice } = useVoiceInput(handleTranscript);
 
-  // Text room's voice input shouldn't keep listening once you've switched
-  // over to the Video Call room — stop it so only one room is ever "live".
+  // Submits a spoken argument directly (bypassing the isMyTurn check in
+  // handleSend, since by the time this fires the turn has already just
+  // ended — the text was captured DURING the valid turn window). Goes
+  // through the exact same "send_argument" socket event as typed arguments,
+  // so it's judged by the same AI scoring pipeline and shows up in the
+  // rounds feed with the same score/feedback.
+  const submitSpokenArgument = useCallback((text) => {
+    const trimmed = text.trim();
+    if (!trimmed || !socketRef.current || isSpectatorOnly || timerExpired) return;
+    setSending(true);
+    socketRef.current.emit("send_argument", { debateId, text: trimmed });
+    setTimeout(() => {
+      setSending((current) => (current ? false : current));
+    }, 15000);
+  }, [debateId, isSpectatorOnly, timerExpired]);
+
+  // Video room: recording is automatic, not a manual toggle. Start capturing
+  // speech the instant it becomes your turn; the moment your turn ends,
+  // stop and submit whatever was transcribed as your argument for that turn
+  // — same 60s turn timer and same AI judge as the text room, just spoken
+  // instead of typed.
+  const wasMyTurnRef = useRef(false);
+  const inputRef = useRef(input);
+  useEffect(() => { inputRef.current = input; }, [input]);
+
   useEffect(() => {
-    if (roomMode !== "text" && listening) {
+    if (roomMode !== "video" || !voiceSupported || ended) return;
+
+    if (isMyTurn && !listening) {
       toggleVoice();
+    } else if (!isMyTurn && wasMyTurnRef.current && listening) {
+      toggleVoice();
+      submitSpokenArgument(inputRef.current);
+      setInput("");
     }
-  }, [roomMode, listening, toggleVoice]);
+    wasMyTurnRef.current = isMyTurn;
+  }, [roomMode, isMyTurn, listening, voiceSupported, ended, toggleVoice, submitSpokenArgument]);
 
   const handleSend = useCallback(() => {
     const text = input.trim();
@@ -639,7 +678,7 @@ const DebateRoom = () => {
       style={{ fontFamily: "'Exo 2', sans-serif", background: "#0a0a1a" }}>
       <AIBackground fixed={true} />
 
-      <div className="relative z-10 max-w-3xl mx-auto">
+      <div className={`relative z-10 mx-auto transition-all ${roomMode === "video" ? "max-w-7xl" : "max-w-3xl"}`}>
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
@@ -666,23 +705,31 @@ const DebateRoom = () => {
         )}
 
         {/* Mode picker — shown ONCE when a live human debate starts and no
-            choice has been made yet. Once picked, this never shows again
-            for the rest of the debate; there's no switching back. */}
+            choice has been made yet (by either participant). Once picked,
+            this never shows again for the rest of the debate — and since
+            the choice is broadcast via the server, both debaters land in
+            the same room even if only one of them actually clicked. */}
         {videoRoomAvailable && !ended && roomMode === null && (
           <div className="mb-6 rounded-2xl p-6 text-center"
             style={{ background: "rgba(8,12,30,0.7)", border: "1px solid rgba(124,58,237,0.25)" }}>
             <h3 className="text-white font-bold text-lg mb-1">Choose how you'll debate</h3>
-            <p className="text-gray-400 text-sm mb-5">This can't be changed once picked — choose the mode you'll use for the whole debate.</p>
+            <p className="text-gray-400 text-sm mb-5">This can't be changed once picked — your opponent will join the same mode automatically.</p>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setRoomMode("text")}
+                onClick={() => {
+                  setRoomMode("text");
+                  socketRef.current?.emit("set_room_mode", { debateId, mode: "text" });
+                }}
                 className="py-4 rounded-xl text-white font-bold text-sm flex flex-col items-center gap-2 hover:brightness-110 active:scale-95 transition-all"
                 style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
               >
                 <span className="text-xl">💬</span> Text Debate
               </button>
               <button
-                onClick={() => setRoomMode("video")}
+                onClick={() => {
+                  setRoomMode("video");
+                  socketRef.current?.emit("set_room_mode", { debateId, mode: "video" });
+                }}
                 className="py-4 rounded-xl text-white font-bold text-sm flex flex-col items-center gap-2 hover:brightness-110 active:scale-95 transition-all"
                 style={{ background: "linear-gradient(135deg,#2563eb,#1d4ed8)", boxShadow: "0 4px 16px rgba(37,99,235,0.35)" }}
               >
@@ -695,9 +742,70 @@ const DebateRoom = () => {
         {/* Video Call room — only rendered once "video" was chosen at the
             start. Locked in: no button anywhere lets you go back to text. */}
         {videoEnabled && !ended && (
-          <VideoPanel {...webrtc} />
-        )}
+          <>
+            <VideoPanel {...webrtc} />
 
+            {/* Same 60s turn timer as the text room, driving automatic
+                speech recording instead of a typing turn. */}
+            <TurnTimer
+              turnSecondsLeft={turnSecondsLeft}
+              currentTurnSide={currentTurnSide}
+              myInfo={mySide}
+              isMyTurn={isMyTurn}
+            />
+
+            {isMyTurn && (
+              <div className="mb-3 flex items-center justify-center gap-2 text-xs font-bold text-red-400">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                {listening ? "Recording your argument — speak now…" : "Starting microphone…"}
+              </div>
+            )}
+            {!isMyTurn && !isSpectatorOnly && debate?.status === "live" && (
+              <p className="mb-3 text-center text-xs text-gray-500">
+                Waiting for {currentTurnSide === "for" ? "FOR" : "AGAINST"} side to speak…
+              </p>
+            )}
+            {!voiceSupported && (
+              <p className="mb-3 text-center text-xs text-orange-400">
+                Your browser doesn't support speech recognition, so spoken arguments can't be auto-transcribed here.
+              </p>
+            )}
+
+            {/* Judged rounds — same AI score/feedback as the text room,
+                since spoken arguments go through the exact same
+                "send_argument" event and scoring pipeline. */}
+            <div ref={scrollRef} className="rounded-2xl p-5 flex flex-col gap-4 mb-3 max-h-[35vh] overflow-y-auto"
+              style={{ background: "rgba(8,12,30,0.7)", border: "1px solid rgba(255,255,255,0.07)" }}>
+              {rounds.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-8">
+                  No arguments yet — start speaking when it's your turn.
+                </p>
+              )}
+              {rounds.map((r, i) => {
+                const isMine = r.user?._id === user?.id || r.user === user?.id;
+                return (
+                  <div key={i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                    <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm"
+                      style={{
+                        background: r.side === "for" ? "rgba(37,99,235,0.12)" : "rgba(236,72,153,0.12)",
+                        border: r.side === "for" ? "1px solid rgba(37,99,235,0.25)" : "1px solid rgba(236,72,153,0.25)",
+                      }}>
+                      <div className="flex items-center justify-between gap-3 mb-1 text-xs font-bold text-gray-400 uppercase tracking-wide">
+                        <span>{r.user?.name || "Debater"} · {r.side}</span>
+                      </div>
+                      <p className="text-gray-200 leading-relaxed">{r.text}</p>
+                      {r.aiScore?.feedback && (
+                        <p className="text-gray-500 text-xs mt-2 italic">
+                          Judge: {r.aiScore.feedback} {r.aiScore.score != null ? `(${r.aiScore.score}/10)` : ""}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* Text Debate room — only mounted once "text" was chosen at the
             start (or video isn't relevant to this debate at all, e.g. AI vs AI). */}
@@ -829,7 +937,7 @@ const DebateRoom = () => {
         </div>
         )}
 
-        {/* Results — shown regardless of which room tab is active */}
+        {/* Results — shown regardless of which room is active */}
         {ended && (
           <ResultsScreen ended={ended} deleteCountdown={deleteCountdown} onLeave={() => navigate("/livedebates")} />
         )}
