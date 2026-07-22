@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import AIBackground from "../Home/AIBackground";
 import { FaVideo, FaVideoSlash, FaMicrophone as FaMic, FaMicrophoneSlash as FaMicOff } from "react-icons/fa";
 import { useWebRTC } from "../../hooks/useWebRTC";
+import { useArgumentTranscription } from "../../hooks/useArgumentTranscription";
 
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/api$/, "")
@@ -135,7 +136,11 @@ const VideoPanel = ({ localStream, remoteStream, connectionState, micOn, camOn, 
   );
 };
 
-/* ─── Voice input hook ─── */
+/* ─── Voice input hook (TEXT ROOM ONLY) ───
+   Uses the browser's native SpeechRecognition API. Safe here because the
+   text room never calls getUserMedia via useWebRTC, so there's no second
+   consumer competing for the microphone. Do NOT reuse this in the video
+   room — see useArgumentTranscription below for why. */
 const useVoiceInput = (onTranscript) => {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -394,6 +399,24 @@ const DebateRoom = () => {
     shouldInitiate,
   });
 
+  // Speech-to-text for the VIDEO room specifically. Deliberately reuses
+  // webrtc.localStream — the exact same mic track already captured for the
+  // peer connection — instead of opening a second, independent microphone
+  // capture via the browser's SpeechRecognition API. Two separate mic
+  // captures competing for the same physical device was silently
+  // swallowing spoken audio here before: recognition reported "listening"
+  // but never produced text, because the OS/browser gave WebRTC's
+  // getUserMedia call exclusive access to the device.
+  const {
+    transcript: spokenTranscript,
+    isTranscribing: spokenTranscribing,
+    error: spokenTranscriptError,
+    resetTranscript: resetSpokenTranscript,
+  } = useArgumentTranscription(webrtc.localStream, {
+    isRecording: roomMode === "video" && isMyTurn && !ended && !isSpectatorOnly,
+    chunkMs: 1000,
+  });
+
   // Derive whose turn it is from rounds
   const deriveTurnSide = useCallback((roundsList) => {
     if (!roundsList || roundsList.length === 0) return "for";
@@ -591,7 +614,7 @@ const DebateRoom = () => {
     }, 1500);
   }, [debateId]);
 
-  // Append voice transcript to input
+  // Append voice transcript to input (TEXT ROOM mic button)
   const handleTranscript = useCallback((transcript) => {
     setInput((prev) => prev ? `${prev} ${transcript}` : transcript);
   }, []);
@@ -614,27 +637,24 @@ const DebateRoom = () => {
     }, 15000);
   }, [debateId, isSpectatorOnly, timerExpired]);
 
-  // Video room: recording is automatic, not a manual toggle. Start capturing
-  // speech the instant it becomes your turn; the moment your turn ends,
-  // stop and submit whatever was transcribed as your argument for that turn
-  // — same 60s turn timer and same AI judge as the text room, just spoken
-  // instead of typed.
+  // Video room: recording starts automatically the instant it becomes your
+  // turn (driven by isRecording inside useArgumentTranscription above). The
+  // moment your turn ends, submit whatever's been transcribed so far as
+  // your argument for that turn — same 60s turn timer and same AI judge as
+  // the text room, just spoken instead of typed.
   const wasMyTurnRef = useRef(false);
-  const inputRef = useRef(input);
-  useEffect(() => { inputRef.current = input; }, [input]);
+  const spokenTranscriptRef = useRef("");
+  useEffect(() => { spokenTranscriptRef.current = spokenTranscript; }, [spokenTranscript]);
 
   useEffect(() => {
-    if (roomMode !== "video" || !voiceSupported || ended) return;
+    if (roomMode !== "video" || ended) return;
 
-    if (isMyTurn && !listening) {
-      toggleVoice();
-    } else if (!isMyTurn && wasMyTurnRef.current && listening) {
-      toggleVoice();
-      submitSpokenArgument(inputRef.current);
-      setInput("");
+    if (!isMyTurn && wasMyTurnRef.current) {
+      submitSpokenArgument(spokenTranscriptRef.current);
+      resetSpokenTranscript();
     }
     wasMyTurnRef.current = isMyTurn;
-  }, [roomMode, isMyTurn, listening, voiceSupported, ended, toggleVoice, submitSpokenArgument]);
+  }, [roomMode, isMyTurn, ended, submitSpokenArgument, resetSpokenTranscript]);
 
   const handleSend = useCallback(() => {
     const text = input.trim();
@@ -755,19 +775,20 @@ const DebateRoom = () => {
             />
 
             {isMyTurn && (
-              <div className="mb-3 flex items-center justify-center gap-2 text-xs font-bold text-red-400">
+              <div className="mb-1 flex items-center justify-center gap-2 text-xs font-bold text-red-400">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                {listening ? "Recording your argument — speak now…" : "Starting microphone…"}
+                {webrtc.localStream ? "Recording your argument — speak now…" : "Waiting for microphone…"}
               </div>
+            )}
+            {isMyTurn && spokenTranscript && (
+              <p className="mb-3 text-center text-xs text-gray-400 italic px-4">"{spokenTranscript}"</p>
+            )}
+            {isMyTurn && spokenTranscriptError && (
+              <p className="mb-3 text-center text-xs text-orange-400">{spokenTranscriptError}</p>
             )}
             {!isMyTurn && !isSpectatorOnly && debate?.status === "live" && (
               <p className="mb-3 text-center text-xs text-gray-500">
                 Waiting for {currentTurnSide === "for" ? "FOR" : "AGAINST"} side to speak…
-              </p>
-            )}
-            {!voiceSupported && (
-              <p className="mb-3 text-center text-xs text-orange-400">
-                Your browser doesn't support speech recognition, so spoken arguments can't be auto-transcribed here.
               </p>
             )}
 
