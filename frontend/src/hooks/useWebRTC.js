@@ -45,6 +45,10 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
 
   const pcRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
+  // Tracks whether we've completed the initial offer/answer handshake at
+  // least once. Used to tell "first connection" apart from "renegotiation"
+  // so onnegotiationneeded doesn't fire a redundant offer during setup.
+  const initialNegotiationDoneRef = useRef(false);
 
   const createPeerConnection = useCallback(() => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -75,9 +79,29 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
       setConnectionState(pc.connectionState);
     };
 
+    // Fires whenever tracks are added/removed after the initial handshake,
+    // e.g. getUserMedia resolving late (slow camera init, permission dialog
+    // delay) and attachLocalTracks calling addTrack post-connection. Without
+    // this, tracks are attached locally but the remote peer's SDP is never
+    // updated — so audio/video is silently attached but never sent.
+    pc.onnegotiationneeded = async () => {
+      try {
+        // Only the initiating side renegotiates to avoid both peers
+        // creating competing offers ("glare"). Also skip if we're already
+        // mid-negotiation.
+        if (!shouldInitiate || pc.signalingState !== "stable") return;
+        if (!initialNegotiationDoneRef.current) return; // initial offer path handles this
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("webrtc_offer", { debateId, offer });
+      } catch (err) {
+        console.error("Renegotiation failed:", err);
+      }
+    };
+
     pcRef.current = pc;
     return pc;
-  }, [socket, debateId]);
+  }, [socket, debateId, shouldInitiate]);
 
   // Returns the existing peer connection if one is already being negotiated,
   // otherwise creates exactly one. Never overwrites an in-progress connection.
@@ -95,6 +119,20 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
         pc.addTrack(track, stream);
       }
     });
+  };
+
+  // Applies any ICE candidates that arrived before the remote description
+  // was set, then clears the queue. Shared by both the offer and answer
+  // paths so late candidates are never silently dropped on either side.
+  const drainPendingCandidates = async (pc) => {
+    for (const c of pendingCandidatesRef.current) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch (err) {
+        console.error("Error applying queued ICE candidate:", err);
+      }
+    }
+    pendingCandidatesRef.current = [];
   };
 
   useEffect(() => {
@@ -143,6 +181,7 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("webrtc_offer", { debateId, offer });
+        initialNegotiationDoneRef.current = true;
       }
     })();
 
@@ -155,26 +194,22 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
 
       setConnectionState("connecting");
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-
-      // Apply any ICE candidates that arrived before the remote description was set
-      for (const c of pendingCandidatesRef.current) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(c));
-        } catch (err) {
-          console.error("Error applying queued ICE candidate:", err);
-        }
-      }
-      pendingCandidatesRef.current = [];
+      await drainPendingCandidates(pc);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit("webrtc_answer", { debateId, answer });
+      initialNegotiationDoneRef.current = true;
     };
 
     const handleAnswer = async ({ answer }) => {
       const pc = pcRef.current;
       if (!pc) return;
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      // BUGFIX: candidates that arrived before the answer was set were
+      // previously left in the queue forever on the initiating side.
+      await drainPendingCandidates(pc);
+      initialNegotiationDoneRef.current = true;
     };
 
     const handleIceCandidate = async ({ candidate }) => {
@@ -201,13 +236,15 @@ export function useWebRTC(socket, debateId, { enabled, shouldInitiate }) {
       socket.off("webrtc_ice_candidate", handleIceCandidate);
       pcRef.current?.close();
       pcRef.current = null;
+      pendingCandidatesRef.current = [];
+      initialNegotiationDoneRef.current = false;
       stream?.getTracks().forEach((t) => t.stop());
       setLocalStream(null);
       setRemoteStream(null);
       setConnectionState("idle");
       setMediaError(null);
     };
-  }, [enabled, socket, debateId, shouldInitiate, createPeerConnection]);
+  }, [enabled, socket, debateId, shouldInitiate, createPeerConnection, ensurePeerConnection]);
 
   const toggleMic = useCallback(() => {
     if (!localStream) return;

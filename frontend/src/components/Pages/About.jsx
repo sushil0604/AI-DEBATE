@@ -5,12 +5,7 @@ import PageShell from "../Pages/PageShell";
 import { statsApi } from "../../services/api";
 import { useAuth } from "../../context/AuthContext"; // adjust relative path per file
 
-const DEFAULT_STATS = [
-  { value: "48,000+", label: "Debates Hosted", key: "debatesHosted" },
-  { value: "120+", label: "Countries", key: "countries" },
-  { value: "9,400", label: "Active Debaters", key: "activeDebaters" },
-  { value: "99.2%", label: "Fair-Judging Score", key: "fairJudgingScore" },
-];
+
 
 const values = [
   {
@@ -36,27 +31,6 @@ const values = [
 const About = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading } = useAuth();
-
-  const [stats, setStats] = useState(DEFAULT_STATS);
-  const [statsLoading, setStatsLoading] = useState(true);
-
-  useEffect(() => {
-    statsApi
-      .platform()
-      .then((res) => {
-        const d = res.data;
-        setStats([
-          { value: d.debatesHosted,   label: "Debates Hosted",     key: "debatesHosted" },
-          { value: d.countries,       label: "Countries",          key: "countries" },
-          { value: d.activeDebaters,  label: "Active Debaters",    key: "activeDebaters" },
-          { value: d.fairJudgingScore,label: "Fair-Judging Score", key: "fairJudgingScore" },
-        ]);
-      })
-      .catch(() => {
-        // fall back silently to DEFAULT_STATS if endpoint isn't ready yet
-      })
-      .finally(() => setStatsLoading(false));
-  }, []);
 
   const handleJoinArena = () => {
     if (authLoading) return;
@@ -101,21 +75,6 @@ const About = () => {
           is a person across the world or our AI Judge. The goal isn't to win arguments — it's to
           get better at making them.
         </p>
-      </div>
-
-      {/* Stats */}
-      <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 rounded-2xl p-5"
-        style={{ background: "rgba(8,12,30,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.06)" }}
-      >
-        {stats.map((s) => (
-          <div key={s.key} className="flex flex-col items-center text-center">
-            <span className={`text-white font-black text-2xl mb-1 ${statsLoading ? "animate-pulse" : ""}`}>
-              {s.value}
-            </span>
-            <span className="text-gray-500 text-xs">{s.label}</span>
-          </div>
-        ))}
       </div>
 
       {/* Values */}

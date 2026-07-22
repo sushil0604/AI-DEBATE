@@ -21,5 +21,10 @@ export function useAuth() {
       .finally(() => setLoading(false));
   }, []);
 
-  return { user, loading, isAuthenticated: !!user };
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+  };
+
+  return { user, loading, isAuthenticated: !!user, logout };
 }
