@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
  */
 export function useArgumentTranscription(
   localStream,
-  { isRecording, chunkMs = 1000, endpoint = "/api/transcribe" } = {}
+  { isRecording, chunkMs = 2000, endpoint = "/api/transcribe" } = {}
 ) {
   const [transcript, setTranscript] = useState("");
   const [isTranscribing, setIsTranscribing] = useState(false);

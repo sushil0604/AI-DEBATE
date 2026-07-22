@@ -12,6 +12,7 @@ const { notFound, errorHandler } = require("./middleware/errorHandler");
 const registerDebateSocket = require("./sockets/debateSocket");
 const { startDebateCleanup } = require("./utils/debateCleanup.js"); // ← NEW
 
+
 // Routes
 const authRoutes = require("./routes/authRoutes");
 const debateRoutes = require("./routes/debateRoutes");
@@ -20,6 +21,7 @@ const tournamentRoutes = require("./routes/tournamentRoutes");
 const aiCoachRoutes = require("./routes/aiCoachRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const { handleWebhook } = require("./controllers/paymentController");
+const transcribeRoutes = require("./routes/transcribeRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -35,6 +37,7 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
 
 app.use(
   cors({
@@ -79,6 +82,7 @@ app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/ai-coach", aiCoachRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/transcribe", transcribeRoutes);
 
 // --- Socket.io ---
 registerDebateSocket(io);

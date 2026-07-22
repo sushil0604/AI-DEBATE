@@ -15,7 +15,7 @@ const fetch = require("node-fetch");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.post("/api/transcribe", upload.single("audio"), async (req, res) => {
+router.post("/", upload.single("audio"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No audio file provided." });
   }
