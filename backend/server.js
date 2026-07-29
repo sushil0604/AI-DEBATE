@@ -6,6 +6,8 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const { Server } = require("socket.io");
 const rateLimit = require("express-rate-limit");
+const passport = require("passport");
+require("./config/passport"); // Google + GitHub OAuth strategies
 
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
@@ -53,6 +55,7 @@ connectDB().then(() => {
 // --- Global middleware ---
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(passport.initialize());
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

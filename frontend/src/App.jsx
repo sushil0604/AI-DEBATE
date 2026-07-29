@@ -13,6 +13,7 @@ import About from './components/Pages/About'
 import Login from './components/Pages/Login'
 import SignUp from './components/Pages/SignUp'
 import DebateRoom from './components/Pages/DebateRoom'
+import OAuthSuccess from "./components/Pages/OAuthSuccess";
 
 const App = () => {
   return (
@@ -34,6 +35,7 @@ const App = () => {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/debate/:debateId" element={<DebateRoom />} />
         <Route path="/map" element={<Topics />} />
+        <Route path="/oauth-success" element={<OAuthSuccess />} />
       </Routes>
     </>
   )

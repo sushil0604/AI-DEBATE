@@ -22,20 +22,18 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setSubmitting(true);
 
     try {
+      setSubmitting(true);
       const res = await authApi.login(form.email, form.password);
       // Updates the shared AuthContext immediately — not just localStorage —
-      // so every component reading isAuthenticated sees the change right away,
-      // with no stale-until-remount race.
+      // so every component reading isAuthenticated sees the change right away.
       login(res.token, res.user);
 
-      // send them back where they came from (e.g. Homepage's "Start Debate" flow), else home
       const redirectTo = location.state?.from || "/";
       navigate(redirectTo, { replace: true, state: location.state?.intent ? { intent: location.state.intent } : undefined });
     } catch (err) {
-      setError(err.message || "Invalid email or password.");
+      setError(err.message || "Couldn't log you in. Check your email and password.");
     } finally {
       setSubmitting(false);
     }
@@ -43,7 +41,6 @@ const Login = () => {
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
   const handleOAuth = (provider) => {
-    // Redirects to your backend's OAuth entry point (needs passport/OAuth strategy set up server-side)
     window.location.href = `${API_BASE}/auth/${provider}`;
   };
 
@@ -112,7 +109,7 @@ const Login = () => {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-gray-400 text-xs font-semibold">Password</label>
-                <Link to="/forgot-password" className="text-violet-400 text-xs font-semibold hover:text-violet-300 transition-colors">
+                <Link to="/forgot-password" className="text-violet-400 hover:text-violet-300 text-xs font-semibold transition-colors">
                   Forgot password?
                 </Link>
               </div>
@@ -144,7 +141,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 py-2.5 rounded-xl text-white font-bold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-60"
+              className="mt-1 py-2.5 rounded-xl text-white font-bold text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
             >
               {submitting ? "Logging in…" : "Log In"}
