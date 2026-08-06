@@ -414,7 +414,13 @@ const DebateRoom = () => {
     resetTranscript: resetSpokenTranscript,
   } = useArgumentTranscription(webrtc.localStream, {
     isRecording: roomMode === "video" && isMyTurn && !ended && !isSpectatorOnly,
-    chunkMs: 1000,
+    // 4s keeps this safely under Groq's free-tier limit of 20 requests per
+    // minute (max 15/min at this size, with margin) and gives Whisper
+    // enough audio per chunk to transcribe accurately — 1s chunks were
+    // both getting rate-limited (dropping ~2/3 of chunks entirely) and
+    // producing garbled results even when they succeeded, since 1 second
+    // often isn't enough context for an accurate transcription.
+    chunkMs: 4000,
   });
 
   // Derive whose turn it is from rounds
