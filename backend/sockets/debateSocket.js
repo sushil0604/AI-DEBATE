@@ -10,6 +10,52 @@ const AI_VS_AI_ROUND_DELAY_MS = 4000;
 const activeTimers = new Map();
 
 /**
+ * Normalizes text for duplicate comparison: lowercase, strip punctuation,
+ * collapse whitespace. Two arguments that only differ by capitalization or
+ * a trailing period should still count as "the same argument."
+ */
+function normalizeArgumentText(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Word-overlap similarity (Jaccard index over word sets), 0–1. Cheap and
+ * dependency-free — good enough to catch "basically the same argument,
+ * reworded slightly" without needing a real NLP/embedding library.
+ */
+function wordOverlapSimilarity(textA, textB) {
+  const wordsA = new Set(normalizeArgumentText(textA).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeArgumentText(textB).split(" ").filter(Boolean));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection++;
+  }
+  const union = wordsA.size + wordsB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+// Above this similarity to any of the SAME user's previous arguments in
+// THIS debate, a new submission is treated as a repeat. Only compares
+// against your own prior rounds — reusing a point your opponent already
+// made isn't blocked by this, only reusing your own.
+const DUPLICATE_SIMILARITY_THRESHOLD = 0.8;
+
+function findDuplicateArgument(newText, previousRoundsBySameUser) {
+  const normalizedNew = normalizeArgumentText(newText);
+  for (const round of previousRoundsBySameUser) {
+    if (normalizeArgumentText(round.text) === normalizedNew) return round;
+    if (wordOverlapSimilarity(newText, round.text) >= DUPLICATE_SIMILARITY_THRESHOLD) return round;
+  }
+  return null;
+}
+
+/**
  * Starts a countdown timer for a live debate.
  * Every second it emits "timer_tick" with secondsLeft.
  * When time runs out:
@@ -237,7 +283,7 @@ async function runAIvsAIDebate(io, debateId) {
  *  - "leave_debate"   { debateId }
  *  - "send_argument"  { debateId, text }
  *  - "typing"         { debateId, isTyping }
- *  - "set_room_mode"  { debateId, mode }        ← NEW: "text" | "video", first choice wins
+ *  - "set_room_mode"  { debateId, mode }        ← "text" | "video", first choice wins
  *
  * Server events (listen on frontend):
  *  - "debate_state"   debate document snapshot (includes roomMode if already chosen)
@@ -247,7 +293,7 @@ async function runAIvsAIDebate(io, debateId) {
  *  - "room_deleted"   { message }
  *  - "user_typing"    { userId, isTyping }
  *  - "user_joined"    { userId, name }
- *  - "room_mode_set"  { mode }                  ← NEW: broadcast to both participants
+ *  - "room_mode_set"  { mode }
  *  - "error_message"  { message }
  */
 function registerDebateSocket(io) {
@@ -404,6 +450,21 @@ function registerDebateSocket(io) {
         );
         if (!participant) {
           return socket.emit("error_message", { message: "You are not a participant in this debate" });
+        }
+
+        // BLOCK DUPLICATE ARGUMENTS: only compare against THIS user's own
+        // previous rounds in this debate (not the opponent's) — reusing a
+        // point your opponent made isn't a duplicate, only reusing your
+        // own point is. Checked before the AI judge call so a rejected
+        // duplicate doesn't waste an API request or get scored.
+        const ownPreviousRounds = debate.rounds.filter(
+          (r) => r.user.toString() === socket.user._id.toString()
+        );
+        const duplicate = findDuplicateArgument(text, ownPreviousRounds);
+        if (duplicate) {
+          return socket.emit("error_message", {
+            message: "You've already made this argument. Try adding a new point instead of repeating one.",
+          });
         }
 
         const aiScore = await judgeArgument({

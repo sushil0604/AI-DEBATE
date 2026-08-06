@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaGlobe, FaMicrochip, FaLeaf, FaLandmark, FaFlask,
@@ -41,6 +41,55 @@ const DURATIONS = [
   { value: 10, label: "10 min", desc: "Standard" },
   { value: 15, label: "15 min", desc: "In-depth" },
 ];
+
+// Shared mode options — used by the hero button's picker menu.
+const DEBATE_MODES = [
+  { mode: "human_vs_human", icon: <FaUserFriends className="text-blue-400" />, label: "Human vs Human", desc: "Debate a real person" },
+  { mode: "human_vs_ai",    icon: <FaRobot className="text-purple-400" />,     label: "Human vs AI",    desc: "Challenge the AI judge" },
+  { mode: "ai_vs_ai",       icon: <FaBolt className="text-teal-400" />,        label: "AI vs AI",       desc: "Watch two AIs debate" },
+];
+
+/* ─── Mode Picker (hero button) ───
+   A small dropdown-style menu, not a full modal — appears right under the
+   hero "Start Debate" button and lets the person pick which kind of match
+   before the topic/side/duration modal opens. */
+const ModePickerMenu = ({ onPick, onClose }) => {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full left-0 mt-2 w-72 rounded-xl p-2 z-30 flex flex-col gap-1"
+      style={{
+        background: "rgba(10,14,30,0.98)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+      }}
+    >
+      {DEBATE_MODES.map((m) => (
+        <button
+          key={m.mode}
+          onClick={() => onPick(m.mode)}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/10 transition-colors"
+        >
+          <span className="text-lg flex-shrink-0">{m.icon}</span>
+          <span className="flex flex-col">
+            <span className="text-white font-bold text-sm">{m.label}</span>
+            <span className="text-gray-400 text-xs">{m.desc}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 /* ─── Start Debate Modal ─── */
 const StartDebateModal = ({ onClose, onSubmit, submitting, error }) => {
@@ -159,6 +208,9 @@ const Homepage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
   const [error, setError] = useState("");
+  // Controls the small mode-picker menu under the hero button — separate
+  // from modalMode, which controls the actual topic/side/duration modal.
+  const [modePickerOpen, setModePickerOpen] = useState(false);
 
   useEffect(() => {
     aiCoachApi
@@ -179,6 +231,7 @@ const Homepage = () => {
 
   const openStartDebate = (mode) => {
     setError("");
+    setModePickerOpen(false);
     if (authLoading) return;
     if (!isAuthenticated) {
       navigate("/login", { state: { from: "/", intent: { mode } } });
@@ -186,6 +239,19 @@ const Homepage = () => {
     }
     setModalError("");
     setModalMode(mode);
+  };
+
+  // Hero "Start Debate" button — opens the small mode-picker menu instead of
+  // jumping straight into a single mode. Still respects the auth check
+  // immediately if the person isn't logged in, so they're not shown a menu
+  // of options they can't actually use yet.
+  const handleHeroStartDebateClick = () => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: "/" } });
+      return;
+    }
+    setModePickerOpen((prev) => !prev);
   };
 
   const handleConfirmStart = async (topic, side, duration) => {
@@ -271,11 +337,23 @@ const Homepage = () => {
           )}
 
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => openStartDebate("human_vs_ai")}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:scale-105 transition-transform"
-              style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.45)" }}
-            >⚡ Start Debate</button>
+            {/* Wrapping div is `relative` so the mode-picker menu can
+                position itself directly under this specific button. */}
+            <div className="relative">
+              <button
+                onClick={handleHeroStartDebateClick}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm hover:scale-105 transition-transform"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 4px 20px rgba(124,58,237,0.45)" }}
+              >⚡ Start Debate</button>
+
+              {modePickerOpen && (
+                <ModePickerMenu
+                  onPick={openStartDebate}
+                  onClose={() => setModePickerOpen(false)}
+                />
+              )}
+            </div>
+
             <button
               onClick={() => navigate("/topics")}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
