@@ -25,6 +25,7 @@
     "mongoose": "^8.24.1",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
+    "node-fetch": "^2.7.0",
     "nodemailer": "^9.0.4",
     "openai": "^6.46.0",
     "passport": "^0.7.0",

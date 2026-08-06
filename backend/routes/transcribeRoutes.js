@@ -1,14 +1,16 @@
 // Example Express route — adapt to your actual backend framework if different
 // (Next.js API route, Fastify, etc. — the Groq call itself is the same).
 //
-// npm install express multer form-data
+// npm install express multer form-data node-fetch@2
 //
-// NOTE: this deliberately does NOT use the `node-fetch` package. Versions
-// 3+ of node-fetch are ESM-only, so `require("node-fetch")` throws
-// ERR_REQUIRE_ESM immediately — which is exactly what was crashing this
-// route with a 500 on every single request. Node 18+ (Render is running
-// Node 24) has `fetch` built in globally, so nothing needs to be imported
-// for it at all.
+// IMPORTANT: install node-fetch@2 specifically, not the latest version.
+// node-fetch 3+ is ESM-only and can't be require()'d. We tried relying on
+// Node's built-in global fetch instead, but this environment threw
+// "fetch is not a function" — meaning something here doesn't expose a
+// working global fetch the way newer Node versions normally do. Pinning to
+// node-fetch@2 sidesteps that entirely: it's real CommonJS, and its export
+// is directly callable as a function, so this works regardless of the
+// underlying Node version or global fetch behavior.
 //
 // Requires GROQ_API_KEY set in your server environment. NEVER expose this
 // key to the browser — that's why the client hook posts to this route
@@ -17,6 +19,7 @@
 const express = require("express");
 const multer = require("multer");
 const FormData = require("form-data");
+const fetch = require("node-fetch"); // must be node-fetch@2 — see note above
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -24,6 +27,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.post("/", upload.single("audio"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No audio file provided." });
+
   }
 
   try {
