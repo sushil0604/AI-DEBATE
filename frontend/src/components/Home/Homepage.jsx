@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaGlobe, FaMicrochip, FaLeaf, FaLandmark, FaFlask,
-  FaGraduationCap, FaBriefcase, FaUsers, FaSearch,
   FaUserFriends, FaRobot, FaBolt, FaTrophy, FaEye, FaTimes, FaClock,
 } from "react-icons/fa";
 import { MdOutlineBalance } from "react-icons/md";
@@ -11,17 +9,6 @@ import { useAuth } from "../../hooks/useAuth";
 import { debateApi, aiCoachApi } from "../../services/api";
 
 /* ─── Data ─── */
-const topics = [
-  { label: "All Topics",   icon: <FaGlobe /> },
-  { label: "Technology",   icon: <FaMicrochip /> },
-  { label: "Environment",  icon: <FaLeaf /> },
-  { label: "Politics",     icon: <FaLandmark /> },
-  { label: "Science",      icon: <FaFlask /> },
-  { label: "Education",    icon: <FaGraduationCap /> },
-  { label: "Business",     icon: <FaBriefcase /> },
-  { label: "Society",      icon: <FaUsers /> },
-];
-
 const DEFAULT_STATS = [
   { label: "Logic",          value: 92 },
   { label: "Evidence",       value: 88 },
@@ -199,8 +186,6 @@ const Homepage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading } = useAuth();
 
-  const [activeTopic, setActiveTopic] = useState("All Topics");
-  const [search, setSearch] = useState("");
   const [stats, setStats] = useState(DEFAULT_STATS);
   const [biasLevel, setBiasLevel] = useState("Low");
   const [statsLoading, setStatsLoading] = useState(true);
@@ -367,24 +352,6 @@ const Homepage = () => {
       </section>
 
       <div className="relative z-10 w-full">
-        <nav className="w-full px-6 py-3 flex items-center gap-2 flex-wrap" style={{ background: "rgba(6,9,24,0.82)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          {topics.map((t) => (
-            <button
-              key={t.label}
-              onClick={() => setActiveTopic(t.label)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${activeTopic === t.label ? "text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
-              style={activeTopic === t.label ? { background: "linear-gradient(135deg,#7c3aed,#4f46e5)", boxShadow: "0 0 18px rgba(124,58,237,0.4)" } : {}}
-            >
-              <span className="text-base">{t.icon}</span>
-              {t.label}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 min-w-[160px]">
-            <FaSearch className="text-gray-400 text-sm" />
-            <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none w-full" placeholder="Search Debate" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-        </nav>
-
         <div className="flex flex-col justify-center">
           <div className="flex text-center py-10 grid grid-cols-1 lg:grid-cols-5 gap-6">
 
