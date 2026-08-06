@@ -663,6 +663,25 @@ const DebateRoom = () => {
     wasMyTurnRef.current = isMyTurn;
   }, [roomMode, isMyTurn, ended, submitSpokenArgument, resetSpokenTranscript]);
 
+  // Manual send for the video room — lets you finalize your spoken argument
+  // early instead of waiting for the full 60s turn timer to run out.
+  // Submitting here goes through the same "send_argument" socket event as
+  // everything else, which the server broadcasts back as "new_argument" —
+  // that broadcast is what actually advances the turn (see the socket
+  // listener earlier in this file), so sending early here correctly ends
+  // your turn immediately rather than leaving the timer running.
+  const handleSendSpokenArgument = useCallback(() => {
+    const text = spokenTranscript.trim();
+    if (!text || sending) return;
+    submitSpokenArgument(text);
+    resetSpokenTranscript();
+    // Prevents the turn-end effect above from re-submitting once isMyTurn
+    // flips false a moment later (it would just no-op on an empty string
+    // anyway, since resetSpokenTranscript already cleared it — this is
+    // just an extra guard for clarity).
+    wasMyTurnRef.current = false;
+  }, [spokenTranscript, sending, submitSpokenArgument, resetSpokenTranscript]);
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text || sending || !socketRef.current || isSpectatorOnly || timerExpired) return;
@@ -788,7 +807,21 @@ const DebateRoom = () => {
               </div>
             )}
             {isMyTurn && spokenTranscript && (
-              <p className="mb-3 text-center text-xs text-gray-400 italic px-4">"{spokenTranscript}"</p>
+              <p className="mb-2 text-center text-xs text-gray-400 italic px-4">"{spokenTranscript}"</p>
+            )}
+            {isMyTurn && (
+              <div className="mb-3 flex items-center justify-center">
+                <button
+                  onClick={handleSendSpokenArgument}
+                  disabled={!spokenTranscript.trim() || sending}
+                  title={spokenTranscript.trim() ? "Submit your argument now" : "Nothing transcribed yet"}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
+                  style={{ background: "linear-gradient(135deg,#7c3aed,#4f46e5)" }}
+                >
+                  <FaPaperPlane className="text-[11px]" />
+                  {sending ? "Sending…" : "Send now"}
+                </button>
+              </div>
             )}
             {isMyTurn && spokenTranscriptError && (
               <p className="mb-3 text-center text-xs text-orange-400">{spokenTranscriptError}</p>
