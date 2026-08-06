@@ -17,8 +17,20 @@ import { useState, useEffect, useRef, useCallback } from "react";
  */
 export function useArgumentTranscription(
   localStream,
-  { isRecording, chunkMs = 500, endpoint = "/api/transcribe" } = {}
+  { isRecording, chunkMs = 2000, endpoint } = {}
 ) {
+  // BUGFIX: a bare relative path like "/api/transcribe" resolves against
+  // whatever domain this page is currently loaded from — the frontend's
+  // own domain (e.g. your Vercel deployment), which has no such route.
+  // That's why every chunk was failing with "Transcription failed for a
+  // segment": the request wasn't even reaching the backend, so Vercel
+  // (or whatever's serving the frontend) returned a 404/405 for a route
+  // it doesn't have, and the hook correctly reported that as a failure.
+  // Default to the same backend base URL the rest of the app already uses.
+  const resolvedEndpoint =
+    endpoint ||
+    `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "")}/transcribe`;
+
   const [transcript, setTranscript] = useState("");
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState(null);
@@ -36,7 +48,7 @@ export function useArgumentTranscription(
         // webm/opus is what MediaRecorder produces in Chrome/Firefox by default
         form.append("audio", blob, "chunk.webm");
 
-        const res = await fetch(endpoint, {
+        const res = await fetch(resolvedEndpoint, {
           method: "POST",
           body: form,
         });
@@ -58,7 +70,7 @@ export function useArgumentTranscription(
         setIsTranscribing(false);
       }
     },
-    [endpoint]
+    [resolvedEndpoint]
   );
 
   // Records one chunk of `chunkMs` length, sends it off, then immediately
