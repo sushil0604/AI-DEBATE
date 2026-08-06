@@ -46,6 +46,13 @@ const userSchema = new mongoose.Schema(
 
     role: { type: String, enum: ["user", "admin"], default: "user" },
     isAI: { type: Boolean, default: false },
+
+    // Forgot-password flow: we store a HASH of the reset token, never the
+    // raw token itself — so if the database were ever leaked, the tokens
+    // in it couldn't be used to reset anyone's password (same principle as
+    // never storing plain-text passwords).
+    resetPasswordTokenHash: { type: String, default: null, select: false },
+    resetPasswordExpires: { type: Date, default: null, select: false },
   },
 
   { timestamps: true }

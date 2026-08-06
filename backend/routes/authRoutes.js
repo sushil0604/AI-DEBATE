@@ -2,9 +2,11 @@ const express = require("express");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const router = express.Router();
 
 const User = require("../models/User"); // adjust path to match your actual User model
+const { sendPasswordResetEmail } = require("../utils/sendEmail"); // adjust path if you save it elsewhere
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
@@ -158,6 +160,92 @@ router.post("/set-password", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("Set password error:", err);
     res.status(500).json({ success: false, message: "Something went wrong setting your password." });
+  }
+});
+
+// ---------- FORGOT PASSWORD ----------
+// Always responds with the same generic success message whether or not the
+// email exists — otherwise this endpoint becomes a way to check which
+// emails have accounts on your site, which is a privacy/enumeration leak.
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    const genericResponse = {
+      success: true,
+      message: "If an account with that email exists, a reset link has been sent.",
+    };
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.json(genericResponse); // don't reveal whether the email exists
+    }
+
+    // Generate a random token. We email the PLAIN version to the user but
+    // only ever store its SHA-256 hash — same reasoning as never storing
+    // plain-text passwords.
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    user.resetPasswordTokenHash = tokenHash;
+    user.resetPasswordExpires = Date.now() + 30 * 60 * 1000; // 30 minutes
+    await user.save({ validateBeforeSave: false }); // skip password-required validation on this partial save
+
+    const resetUrl = `${FRONTEND_URL}/reset-password/${rawToken}`;
+
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl);
+    } catch (emailErr) {
+      console.error("Failed to send reset email:", emailErr);
+      // Roll back the token so a failed email doesn't leave a dangling,
+      // unusable reset request sitting on the account.
+      user.resetPasswordTokenHash = null;
+      user.resetPasswordExpires = null;
+      await user.save({ validateBeforeSave: false });
+      return res.status(500).json({ success: false, message: "Could not send reset email. Please try again later." });
+    }
+
+    res.json(genericResponse);
+  } catch (err) {
+    console.error("Forgot password error:", err);
+    res.status(500).json({ success: false, message: "Something went wrong." });
+  }
+});
+
+// ---------- RESET PASSWORD ----------
+// The :token in the URL is the PLAIN token from the email — we hash it the
+// same way here and compare hashes, never storing or trusting the plain
+// token beyond this one comparison.
+router.post("/reset-password/:token", async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(req.params.token).digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordTokenHash: tokenHash,
+      resetPasswordExpires: { $gt: Date.now() }, // must not be expired
+    }).select("+resetPasswordTokenHash +resetPasswordExpires");
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "This reset link is invalid or has expired." });
+    }
+
+    user.password = password; // pre("save") hook hashes this
+    user.resetPasswordTokenHash = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    res.json({ success: true, message: "Password reset successfully. You can now log in." });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    res.status(500).json({ success: false, message: "Something went wrong." });
   }
 });
 
