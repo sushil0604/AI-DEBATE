@@ -421,6 +421,7 @@ const DebateRoom = () => {
     // producing garbled results even when they succeeded, since 1 second
     // often isn't enough context for an accurate transcription.
     chunkMs: 4000,
+    silenceThreshold: 0.02, // adjust based on testing — see useArgumentTranscription.js notes
   });
 
   // Derive whose turn it is from rounds
