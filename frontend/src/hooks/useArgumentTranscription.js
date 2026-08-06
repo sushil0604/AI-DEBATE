@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
  */
 export function useArgumentTranscription(
   localStream,
-  { isRecording, chunkMs = 2000, endpoint } = {}
+  { isRecording, chunkMs = 2000, endpoint, silenceThreshold = 0.02 } = {}
 ) {
   // BUGFIX: a bare relative path like "/api/transcribe" resolves against
   // whatever domain this page is currently loaded from — the frontend's
@@ -38,6 +38,15 @@ export function useArgumentTranscription(
   const recorderRef = useRef(null);
   const audioOnlyStreamRef = useRef(null);
   const stopRequestedRef = useRef(false);
+
+  // Web Audio API nodes used purely to measure mic volume in real time —
+  // completely separate from the MediaRecorder, which still records the
+  // full-fidelity audio for upload. This just watches the signal level.
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const volumeDataRef = useRef(null);
+  const maxVolumeThisChunkRef = useRef(0);
+  const volumeMonitorFrameRef = useRef(null);
 
   const sendChunk = useCallback(
     async (blob) => {
@@ -73,6 +82,31 @@ export function useArgumentTranscription(
     [resolvedEndpoint]
   );
 
+  // Continuously samples the mic's volume level via an AnalyserNode and
+  // tracks the loudest moment seen so far in the current chunk window.
+  // Runs on a requestAnimationFrame loop, independent of the recorder.
+  const monitorVolume = useCallback(() => {
+    if (!analyserRef.current || !volumeDataRef.current) return;
+
+    analyserRef.current.getByteTimeDomainData(volumeDataRef.current);
+
+    // Compute RMS (root mean square) of the waveform, normalized 0–1.
+    // Silence sits right at the midpoint (128) of the byte range, so we
+    // measure deviation from that midpoint.
+    let sumSquares = 0;
+    for (let i = 0; i < volumeDataRef.current.length; i++) {
+      const normalized = (volumeDataRef.current[i] - 128) / 128;
+      sumSquares += normalized * normalized;
+    }
+    const rms = Math.sqrt(sumSquares / volumeDataRef.current.length);
+
+    if (rms > maxVolumeThisChunkRef.current) {
+      maxVolumeThisChunkRef.current = rms;
+    }
+
+    volumeMonitorFrameRef.current = requestAnimationFrame(monitorVolume);
+  }, []);
+
   // Records one chunk of `chunkMs` length, sends it off, then immediately
   // starts the next chunk — giving a rolling ~chunkMs-delayed transcript
   // instead of waiting for the whole turn to finish.
@@ -86,6 +120,7 @@ export function useArgumentTranscription(
 
       const recorder = new MediaRecorder(stream, { mimeType });
       const localChunks = [];
+      maxVolumeThisChunkRef.current = 0; // reset the peak-volume tracker for this window
 
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) localChunks.push(e.data);
@@ -93,7 +128,18 @@ export function useArgumentTranscription(
 
       recorder.onstop = () => {
         const blob = new Blob(localChunks, { type: mimeType });
-        sendChunk(blob);
+
+        // BUGFIX: sending near-silent chunks to Whisper was producing
+        // hallucinated text (invented words/phrases) roughly as often as
+        // it correctly returned empty results — Whisper isn't reliable on
+        // audio that's mostly silence. If the loudest moment in this whole
+        // chunk never exceeded the threshold, nobody was really speaking —
+        // skip the upload entirely instead of gambling on what Whisper
+        // guesses.
+        if (maxVolumeThisChunkRef.current >= silenceThreshold) {
+          sendChunk(blob);
+        }
+
         if (!stopRequestedRef.current) {
           recordLoop(stream); // start the next chunk right away
         }
@@ -115,7 +161,7 @@ export function useArgumentTranscription(
         if (recorder.state === "recording") recorder.stop();
       }, chunkMs);
     },
-    [chunkMs, sendChunk]
+    [chunkMs, sendChunk, silenceThreshold]
   );
 
   useEffect(() => {
@@ -133,6 +179,20 @@ export function useArgumentTranscription(
     audioOnlyStreamRef.current = audioOnlyStream;
     stopRequestedRef.current = false;
 
+    // Set up the volume-monitoring side channel.
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContextClass();
+    const source = audioContext.createMediaStreamSource(audioOnlyStream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+    volumeDataRef.current = new Uint8Array(analyser.fftSize);
+
+    volumeMonitorFrameRef.current = requestAnimationFrame(monitorVolume);
+
     recordLoop(audioOnlyStream);
 
     return () => {
@@ -142,8 +202,19 @@ export function useArgumentTranscription(
       }
       recorderRef.current = null;
       audioOnlyStreamRef.current = null;
+
+      if (volumeMonitorFrameRef.current) {
+        cancelAnimationFrame(volumeMonitorFrameRef.current);
+        volumeMonitorFrameRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      volumeDataRef.current = null;
     };
-  }, [isRecording, localStream, recordLoop]);
+  }, [isRecording, localStream, recordLoop, monitorVolume]);
 
   const resetTranscript = useCallback(() => setTranscript(""), []);
 
