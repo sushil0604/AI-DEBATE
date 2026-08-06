@@ -1,7 +1,14 @@
 // Example Express route — adapt to your actual backend framework if different
 // (Next.js API route, Fastify, etc. — the Groq call itself is the same).
 //
-// npm install express multer form-data node-fetch
+// npm install express multer form-data
+//
+// NOTE: this deliberately does NOT use the `node-fetch` package. Versions
+// 3+ of node-fetch are ESM-only, so `require("node-fetch")` throws
+// ERR_REQUIRE_ESM immediately — which is exactly what was crashing this
+// route with a 500 on every single request. Node 18+ (Render is running
+// Node 24) has `fetch` built in globally, so nothing needs to be imported
+// for it at all.
 //
 // Requires GROQ_API_KEY set in your server environment. NEVER expose this
 // key to the browser — that's why the client hook posts to this route
@@ -10,7 +17,6 @@
 const express = require("express");
 const multer = require("multer");
 const FormData = require("form-data");
-const fetch = require("node-fetch");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
