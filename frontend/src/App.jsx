@@ -12,6 +12,8 @@ import TournamentBracket from './components/Pages/TournamentBracket'
 import About from './components/Pages/About'
 import Login from './components/Pages/Login'
 import SignUp from './components/Pages/SignUp'
+import ForgotPassword from './components/Pages/ForgotPassword'
+import ResetPassword from './components/Pages/ResetPassword'
 import DebateRoom from './components/Pages/DebateRoom'
 import OAuthSuccess from "./components/Pages/OAuthSuccess";
 
@@ -33,6 +35,8 @@ const App = () => {
         <Route path="/about" element={<About />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/debate/:debateId" element={<DebateRoom />} />
         <Route path="/map" element={<Topics />} />
         <Route path="/oauth-success" element={<OAuthSuccess />} />
