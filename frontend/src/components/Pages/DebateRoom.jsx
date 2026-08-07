@@ -384,8 +384,21 @@ const DebateRoom = () => {
   )?.side;
   const isMyTurn = !isSpectatorOnly && mySide === currentTurnSide && !timerExpired && debate?.status === "live";
 
-  // Video is only relevant once both sides are live in a real (non-AI) debate.
-  const videoRoomAvailable = !isSpectatorOnly && debate?.status === "live";
+  // BUGFIX: a third-party viewer watching a live human_vs_human debate has
+  // no `mySide` (they're not one of the two participants), but this used
+  // to be missing from the video-room gate entirely. That meant a
+  // spectator on a video-mode debate still got their camera/mic grabbed
+  // and a WebRTC connection attempted — one that could never actually
+  // complete, since the peer connection here is built for exactly the two
+  // real participants (one offerer, one answerer). The spectator was left
+  // stuck on "Waiting to connect…" / IDLE forever, and their mic was
+  // requested for no reason. Only actual participants should trigger any
+  // of this.
+  const isParticipant = !!mySide;
+
+  // Video is only relevant once both sides are live in a real (non-AI)
+  // debate, AND only for the two actual participants — not spectators.
+  const videoRoomAvailable = !isSpectatorOnly && isParticipant && debate?.status === "live";
   // The hook only turns the camera/mic/peer connection on once "video" was
   // chosen at the start. There's no switching back, but the hook still gates
   // on this the same way — camera/mic release if this ever goes false
@@ -943,7 +956,7 @@ const DebateRoom = () => {
         )}
 
         {/* Input */}
-        {!ended && !isSpectatorOnly && (
+        {!ended && !isSpectatorOnly && isParticipant && (
           <div className="flex items-center gap-2">
             <input
               value={input}
@@ -994,6 +1007,15 @@ const DebateRoom = () => {
               <FaPaperPlane className="text-sm" />
             </button>
           </div>
+        )}
+
+        {/* Shown instead of the input for anyone watching who isn't one of
+            the two actual participants — makes it clear why there's no way
+            to type, rather than the input just silently disappearing. */}
+        {!ended && !isSpectatorOnly && !isParticipant && debate?.status === "live" && (
+          <p className="text-center text-xs text-gray-500 flex items-center justify-center gap-1.5">
+            <FaEye className="text-teal-400" /> You're spectating this debate — only the two debaters can submit arguments.
+          </p>
         )}
         </div>
         )}
