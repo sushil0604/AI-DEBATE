@@ -3,9 +3,13 @@ const Debate = require("../models/Debate");
 const User = require("../models/User");
 const { judgeArgument, judgeDebate } = require("../utils/aiService/index");
 
-// Valid debate durations in minutes
-const VALID_DURATIONS = [5, 10, 15];
-const DEFAULT_DURATION = 10;
+// Valid debate durations in minutes — must match the DURATIONS options in
+// the frontend's Homepage.jsx StartDebateModal. If these two lists ever
+// drift apart, a duration the user picked on the frontend will silently
+// fall back to DEFAULT_DURATION here instead of being honored or rejected
+// with a clear error — so keep them in sync.
+const VALID_DURATIONS = [1, 5, 10];
+const DEFAULT_DURATION = 5;
 
 // Finds or creates the AI opponent used for human_vs_ai debates
 async function getOrCreateAIOpponent() {

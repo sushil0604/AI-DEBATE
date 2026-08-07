@@ -24,9 +24,9 @@ const barColor = (label) => ({
 }[label] || "bg-purple-500");
 
 const DURATIONS = [
+  { value: 1,  label: "1 min",  desc: "Lightning round" },
   { value: 5,  label: "5 min",  desc: "Quick fire" },
   { value: 10, label: "10 min", desc: "Standard" },
-  { value: 15, label: "15 min", desc: "In-depth" },
 ];
 
 // Shared mode options — used by the hero button's picker menu.
