@@ -54,7 +54,14 @@ const debateSchema = new mongoose.Schema(
     autoPlayStarted: { type: Boolean, default: false },
 
     // Timer fields
-    duration: { type: Number, enum: [5, 10, 15], default: 10 },
+    // BUGFIX: this enum must match VALID_DURATIONS in debateController.js —
+    // it didn't, which is why picking "1 min" on the frontend passed the
+    // controller's own validation fine, but then failed here at save time
+    // with "`1` is not a valid enum value for path `duration`." These two
+    // lists are independent and Mongoose doesn't know about the controller's
+    // constant, so if the allowed durations ever change again, update BOTH
+    // this enum and VALID_DURATIONS together.
+    duration: { type: Number, enum: [1, 5, 10], default: 5 },
     endsAt: { type: Date, default: null },
   },
   { timestamps: true }
