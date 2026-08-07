@@ -100,6 +100,12 @@ async function handleTimerExpiry(io, debateId, roomName) {
     let verdict = { winnerSide: "draw", verdict: "Time expired with no arguments submitted." };
 
     if (debate.rounds.length > 0) {
+      // NOTE: judgeDebate is an AI API call and can take a few seconds —
+      // this is the exact window during which debateCleanup.js's periodic
+      // sweep can independently delete this same "expired live" debate out
+      // from under us (it runs every 60s and doesn't know this handler is
+      // already mid-flight on it). See the BUGFIX note below for how we
+      // recover from that instead of silently losing the result.
       verdict = await judgeDebate({ topic: debate.topic, rounds: debate.rounds });
     }
 
@@ -108,18 +114,38 @@ async function handleTimerExpiry(io, debateId, roomName) {
       winnerParticipant = debate.participants.find((p) => p.side === verdict.winnerSide);
     }
 
-    debate.status = "finished";
-    debate.endedAt = new Date();
-    debate.finalVerdict = verdict.verdict || "";
-    debate.winner = winnerParticipant ? winnerParticipant.user._id : null;
-    await debate.save();
+    // BUGFIX: previously this did debate.save(), which throws
+    // DocumentNotFoundError if the cleanup job deleted the document during
+    // the judgeDebate() call above — and that error was caught by the
+    // outer try/catch and just logged, meaning debate_ended was NEVER
+    // emitted and the frontend was stuck showing "Time's up!" forever.
+    // findByIdAndUpdate with { new: true } either updates the still-
+    // existing document, or returns null if it's already gone — either
+    // way we don't throw, and we can decide what to do next explicitly.
+    const updatedDebate = await Debate.findByIdAndUpdate(
+      debateId,
+      {
+        status: "finished",
+        endedAt: new Date(),
+        finalVerdict: verdict.verdict || "",
+        winner: winnerParticipant ? winnerParticipant.user._id : null,
+      },
+      { new: true }
+    );
 
-    // Update ratings for human debates
-    if (debate.mode !== "ai_vs_ai" && debate.rounds.length > 0) {
+    // Update ratings for human debates — only if the document still
+    // existed to update. If it was already deleted by the cleanup job,
+    // there's no persistent record left to attach a rating update to, so
+    // skip it rather than operating on stale in-memory data.
+    if (updatedDebate && debate.mode !== "ai_vs_ai" && debate.rounds.length > 0) {
       await updateRatingsAndStats(debate, winnerParticipant);
     }
 
-    // 1. Emit results screen to all users in the room
+    // Emit the results screen regardless of whether the DB write above
+    // succeeded — the people in the room still deserve to see their
+    // verdict/scores even in the rare case the document raced with
+    // cleanup and is already gone. This is the fix for the actual bug:
+    // no more silent "stuck on Time's up!" screen.
     io.to(roomName).emit("debate_ended", {
       reason: "timer_expired",
       winnerSide: verdict.winnerSide || "draw",
@@ -129,7 +155,19 @@ async function handleTimerExpiry(io, debateId, roomName) {
       deleteInSeconds: 60,
     });
 
-    // 2. Wait 60s then delete and kick everyone
+    // If the document is already gone, there's nothing left to clean up —
+    // skip straight to notifying clients to leave, no need to wait 60s or
+    // attempt another delete.
+    if (!updatedDebate) {
+      io.to(roomName).emit("room_deleted", {
+        message: "This debate room has been removed.",
+      });
+      const sockets = await io.in(roomName).fetchSockets();
+      for (const s of sockets) s.leave(roomName);
+      return;
+    }
+
+    // Wait 60s then delete and kick everyone
     setTimeout(async () => {
       try {
         await Debate.findByIdAndDelete(debateId);
